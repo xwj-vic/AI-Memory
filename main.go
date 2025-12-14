@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"time"
 
 	"ai-memory/pkg/config"
 	"ai-memory/pkg/llm"
 	"ai-memory/pkg/memory"
 	"ai-memory/pkg/store"
+	"ai-memory/pkg/types"
 )
 
 func main() {
@@ -89,56 +89,75 @@ func main() {
 }
 
 const DemoUserID = "demo_user"
+const SessionA = "session_a"
+const SessionB = "session_b"
 
 func runDemo(ctx context.Context, m *memory.Manager) {
-	// Add interactions
-	fmt.Println("\n--- Adding New Memories ---")
-	inputs := []struct {
-		in, out string
-	}{
-		{"Hello, I'm working on a memory system.", "That sounds interesting! How are you implementing it?"},
-		{"I'm using Redis for short-term and Vector DB for long-term on Mac.", "Redis is a great choice for fast access. Vector DBs help with semantic retrieval."},
-		{"My concern is when to summarize.", "Usually based on token count or number of turns."},
-		{"I want to use OpenAI for the summarization.", "OpenAI's models are excellent for summarization tasks."},
-		{"Can you help me write the Go code?", "Certainly! I can help you with Go implementation."},
-		{"I love coding in Go.", "Go is efficient and simple, perfect for systems engineering."},
-	}
+	fmt.Printf("=== Starting Demo for User: %s, Sessions: %s, %s ===\n", DemoUserID, SessionA, SessionB)
 
-	for _, p := range inputs {
-		if err := m.Add(ctx, DemoUserID, p.in, p.out, nil); err != nil {
-			log.Printf("Error adding memory: %v", err)
-		} else {
-			fmt.Print(".")
+	// 1. Add to Session A (Coding Context)
+	fmt.Println("\n--- [Session A] Adding Interactions ---")
+	inputsA := []struct{ in, out string }{
+		{"I want to write a Go server.", "I can help. Let's use net/http."},
+		{"Do I need a framework?", "Standard library is often enough for simple services."},
+	}
+	for _, p := range inputsA {
+		if err := m.Add(ctx, DemoUserID, SessionA, p.in, p.out, nil); err != nil {
+			log.Printf("Error adding to Session A: %v", err)
 		}
-		time.Sleep(100 * time.Millisecond) // simulates time
 	}
-	fmt.Println("\nDone adding.")
 
-	// Retrieve
-	fmt.Println("\n--- Retrieving Context (STM + LTM) ---")
-	results, err := m.Retrieve(ctx, DemoUserID, "What logic am I using for implementation?", 5)
-	if err != nil {
-		log.Printf("Error retrieving: %v", err)
+	// 2. Add to Session B (Creative Context)
+	fmt.Println("\n--- [Session B] Adding Interactions ---")
+	inputsB := []struct{ in, out string }{
+		{"Write a poem about rust (the metal).", "Iron red, oxidation spreads..."},
 	}
-	for i, r := range results {
+	for _, p := range inputsB {
+		if err := m.Add(ctx, DemoUserID, SessionB, p.in, p.out, nil); err != nil {
+			log.Printf("Error adding to Session B: %v", err)
+		}
+	}
+
+	// 3. Retrieve Session A (Should NOT see B)
+	fmt.Println("\n--- [Session A] Retrieving Context ---")
+	resultsA, _ := m.Retrieve(ctx, DemoUserID, SessionA, "context", 5)
+	for i, r := range resultsA {
 		fmt.Printf("[%d] [%s] %s\n", i, r.Type, r.Content)
 	}
 
-	// Summarize
-	fmt.Println("\n--- Triggering Logic: Summarization (STM -> LTM) ---")
-	if err := m.Summarize(ctx, DemoUserID); err != nil {
-		log.Printf("Error summarizing: %v", err)
+	// 4. Retrieve Session B (Should NOT see A)
+	fmt.Println("\n--- [Session B] Retrieving Context ---")
+	resultsB, _ := m.Retrieve(ctx, DemoUserID, SessionB, "context", 5)
+	for i, r := range resultsB {
+		fmt.Printf("[%d] [%s] %s\n", i, r.Type, r.Content)
+	}
+
+	// 5. Summarize Session A -> LTM
+	fmt.Println("\n--- [Session A] Triggering Summarization ---")
+	// Add more inputs to trigger threshold if needed, or force it
+	// Just calling Summarize manually
+	if err := m.Summarize(ctx, DemoUserID, SessionA); err != nil {
+		log.Printf("Session A Summary Error (might be not enough items): %v", err)
 	} else {
-		fmt.Println("Summarization complete.")
+		fmt.Println("Session A Summarized.")
 	}
 
-	// Retrieve Again (Should see LTM now)
-	fmt.Println("\n--- Retrieving After Summary ---")
-	results2, err := m.Retrieve(ctx, DemoUserID, "What logic am I using for implementation?", 5)
-	if err != nil {
-		log.Printf("Error retrieving: %v", err)
+	// 6. Verify Session A STM Cleared
+	resultsA2, _ := m.Retrieve(ctx, DemoUserID, SessionA, "context", 5)
+	if len(resultsA2) == 0 { // Actually might get LTM results now
+		fmt.Println("\n--- [Session A] Post-Summary: STM should be empty, seeing LTM ---")
 	}
-	for i, r := range results2 {
+	for i, r := range resultsA2 {
 		fmt.Printf("[%d] [%s] %s\n", i, r.Type, r.Content)
+	}
+
+	// 7. Verify Session B can see Session A's Summary (via shared User LTM)
+	fmt.Println("\n--- [Session B] Retrieving (Checking for A's Summary) ---")
+	resultsB2, _ := m.Retrieve(ctx, DemoUserID, SessionB, "Go server", 5)
+	for i, r := range resultsB2 {
+		fmt.Printf("[%d] [%s] %s\n", i, r.Type, r.Content)
+		if r.Type == types.LongTerm || r.Type == types.Entity {
+			fmt.Println("  -> Confirmed: Session B accessed User LTM.")
+		}
 	}
 }
