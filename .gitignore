@@ -1,0 +1,21 @@
+# Secrets
+.env
+
+# Binaries
+bin/
+*.exe
+*.test
+*.out
+
+# Dependency directories (optional, depending on strategy)
+vendor/
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
