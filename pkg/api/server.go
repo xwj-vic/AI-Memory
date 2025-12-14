@@ -33,14 +33,37 @@ func (s *Server) routes() {
 	// Protected Routes (TODO: Add Middleware)
 	s.mux.HandleFunc("GET /api/memories", s.handleListMemories)
 	s.mux.HandleFunc("POST /api/memories", s.handleAddMemory)
+	s.mux.HandleFunc("PUT /api/memories/{id}", s.handleUpdateMemory)
 	s.mux.HandleFunc("POST /api/retrieve", s.handleRetrieveMemory)
 	s.mux.HandleFunc("DELETE /api/memories/{id}", s.handleDeleteMemory)
 
 	// Static Files (Frontend) - Must be last to avoid catching API routes if not specific
-	// Use Go 1.22 pattern to match only root? No, FileServer handles generic.
-	// But /api/ is handled above.
 	fs := http.FileServer(http.Dir("./frontend/dist"))
 	s.mux.Handle("/", fs)
+}
+
+func (s *Server) handleUpdateMemory(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		http.Error(w, "Missing memory ID", http.StatusBadRequest)
+		return
+	}
+
+	var payload struct {
+		Content string `json:"content"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	if err := s.memory.Update(r.Context(), id, payload.Content); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to update: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"status": "updated"})
 }
 
 func (s *Server) Start(addr string) error {
@@ -83,7 +106,29 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleListMemories(w http.ResponseWriter, r *http.Request) {
-	memories, err := s.memory.List(r.Context())
+	// Parse Query Params
+	query := r.URL.Query()
+	userID := query.Get("user_id")
+	memType := query.Get("type")
+
+	page := 1
+	if pStr := query.Get("page"); pStr != "" {
+		fmt.Sscanf(pStr, "%d", &page)
+	}
+
+	limit := 50
+	if lStr := query.Get("limit"); lStr != "" {
+		fmt.Sscanf(lStr, "%d", &limit)
+	}
+
+	filter := memory.Filter{
+		UserID: userID,
+		Type:   memType,
+		Page:   page,
+		Limit:  limit,
+	}
+
+	memories, err := s.memory.List(r.Context(), filter)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to list memories: %v", err), http.StatusInternalServerError)
 		return
@@ -91,6 +136,8 @@ func (s *Server) handleListMemories(w http.ResponseWriter, r *http.Request) {
 
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"memories": memories,
+		"page":     page,
+		"limit":    limit,
 	})
 }
 

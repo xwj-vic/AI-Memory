@@ -17,7 +17,7 @@ type Memory interface {
 	Summarize(ctx context.Context, userID string, sessionID string) error
 
 	// List retrieves all long-term memories (for admin).
-	List(ctx context.Context) ([]types.Record, error)
+	List(ctx context.Context, filter map[string]interface{}, limit int, offset int) ([]types.Record, error)
 
 	// Delete removes a memory record by ID.
 	Delete(ctx context.Context, id string) error
@@ -38,7 +38,13 @@ type VectorStore interface {
 	Delete(ctx context.Context, ids []string) error
 
 	// List retrieves all records (for summarization/cleanup).
-	List(ctx context.Context) ([]types.Record, error)
+	List(ctx context.Context, filter map[string]interface{}, limit int, offset int) ([]types.Record, error)
+
+	// Update modifies an existing record.
+	Update(ctx context.Context, record types.Record) error
+
+	// Get retrieves a record by ID.
+	Get(ctx context.Context, id string) (*types.Record, error)
 }
 
 // KVStore abstracts key-value storage for metadata or raw logs.
@@ -52,6 +58,14 @@ type ListStore interface {
 	RPush(ctx context.Context, key string, values ...interface{}) error
 	LRange(ctx context.Context, key string, start, stop int) ([]string, error)
 	Del(ctx context.Context, keys ...string) error
+	// ScanKeys returns keys matching a pattern (e.g. for finding user sessions).
+	ScanKeys(ctx context.Context, pattern string) ([]string, error)
+
+	// Update modifies a record in the list by ID.
+	Update(ctx context.Context, record types.Record) error
+
+	// Get searches for a record by ID across all lists.
+	Get(ctx context.Context, id string) (*types.Record, error)
 }
 
 // Embedder abstracts the text embedding model provider.

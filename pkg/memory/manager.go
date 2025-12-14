@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/google/uuid"
@@ -32,6 +33,13 @@ func NewManager(cfg *config.Config, vStore VectorStore, lStore ListStore, embedd
 		embedder:    embedder,
 		llm:         llmModel,
 	}
+}
+
+type Filter struct {
+	UserID string
+	Type   string // "short_term", "long_term", "all"
+	Limit  int
+	Page   int
 }
 
 // Add stores a new interaction in Short-Term Memory (Redis).
@@ -155,7 +163,7 @@ func (m *Manager) Summarize(ctx context.Context, userID string, sessionID string
 				Embedding: attrVec,
 				Timestamp: time.Now(),
 				Metadata:  map[string]interface{}{"user_id": userID, "source_session": sessionID},
-				Type:      types.Entity,
+				Type:      types.LongTerm,
 			}
 			_ = m.vectorStore.Add(ctx, []types.Record{attrRecord})
 			fmt.Printf("Identified and stored user attributes for %s.\n", userID)
@@ -191,9 +199,169 @@ func (m *Manager) Summarize(ctx context.Context, userID string, sessionID string
 	return nil
 }
 
-// List retrieves all LTM records.
-func (m *Manager) List(ctx context.Context) ([]types.Record, error) {
-	return m.vectorStore.List(ctx)
+// List retrieves all records with filtering.
+func (m *Manager) List(ctx context.Context, filter Filter) ([]types.Record, error) {
+	var results []types.Record
+
+	// Defaults
+	if filter.Limit <= 0 {
+		filter.Limit = 50
+	}
+	if filter.Page <= 0 {
+		filter.Page = 1
+	}
+
+	offset := (filter.Page - 1) * filter.Limit
+
+	// 1. Fetch Short-Term Memory if requested
+	if filter.Type == "short_term" || filter.Type == "all" || filter.Type == "" {
+		// If UserID is provided, search specific session keys
+		// Pattern: memory:stm:<UserID>:*
+		pattern := "memory:stm:*:*"
+		if filter.UserID != "" {
+			pattern = fmt.Sprintf("memory:stm:%s:*", filter.UserID)
+		}
+
+		keys, err := m.stmStore.ScanKeys(ctx, pattern)
+		if err == nil {
+			for _, key := range keys {
+				// Fetch all items from list (inefficient for large lists but STM is short by definition)
+				items, _ := m.stmStore.LRange(ctx, key, 0, -1)
+				for _, data := range items {
+					var rec types.Record
+					if err := json.Unmarshal([]byte(data), &rec); err == nil {
+						// Filter by UserID check (redundant if key matched, but safe)
+						if filter.UserID != "" {
+							if metaUser, ok := rec.Metadata["user_id"].(string); ok && metaUser != filter.UserID {
+								continue
+							}
+						}
+						results = append(results, rec)
+					}
+				}
+			}
+		}
+	}
+
+	// 2. Fetch Long-Term Memory if requested
+	if filter.Type == "long_term" || filter.Type == "all" || filter.Type == "" {
+		// Call Vector Store List with filters
+		vFilters := make(map[string]interface{})
+		if filter.UserID != "" {
+			vFilters["user_id"] = filter.UserID
+		}
+		// If requesting "long_term", we want ALL records in VectorStore (LTM + Legacy Entity).
+		// VectorStore does not contain ShortTerm.
+		// So we only apply specific type filter if it's NOT long_term (and NOT all).
+		if filter.Type != "" && filter.Type != "all" && filter.Type != "long_term" {
+			vFilters["type"] = filter.Type
+		}
+
+		// For LTM, we use the store's pagination if we are ONLY fetching LTM.
+		// If we are mixing (All), pagination becomes complex (STM + LTM).
+		// For MVP:
+		// If Type == "long_term", we rely on store pagination.
+		// If Type == "all" or "short_term", we fetch and paginate in memory (since we have to merge STM).
+
+		if filter.Type == "long_term" {
+			ltmRecs, err := m.vectorStore.List(ctx, vFilters, filter.Limit, offset)
+			if err != nil {
+				return nil, err
+			}
+			results = append(results, ltmRecs...)
+			// If we are only doing LTM, we are done (assuming store handled offset)
+			// But wait, List return type is []Record.
+			return results, nil
+		} else {
+			// "all" or "short_term" mixed with LTM?
+			// If "all", we fetch LTM too, but without offset/limit at store level? No, that's too heavy.
+			// Strategy: Fetch LTM page 1 (or up to limit?)
+			// If we blend, standard pagination is hard.
+			// Simplified approach for "all":
+			// Fetch STM.
+			// Fetch LTM (with limit).
+			// Combine, Sort by Timestamp Descending.
+			// Slice options.
+
+			// We'll fetch LTM with loose limit (e.g. limit + offset) just in case?
+			// Or just simple: STM is usually small.
+			// Let's Load STM, then append LTM.
+
+			// If Filter is "all", we fetch LTM as well.
+			if filter.Type == "all" || filter.Type == "" {
+				ltmRecs, err := m.vectorStore.List(ctx, vFilters, filter.Limit+offset, 0) // Fetch from 0 to needed count
+				if err == nil {
+					results = append(results, ltmRecs...)
+				}
+			}
+		}
+	}
+
+	// 3. In-Memory Sort and Paginate (for merged results)
+	// Sort by Timestamp Descending
+	// (Assuming we want newest first)
+	// Import "sort" is needed? Manager file imports.
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].Timestamp.After(results[j].Timestamp)
+	})
+
+	// Pagination
+	total := len(results)
+	if offset >= total {
+		return []types.Record{}, nil
+	}
+	end := offset + filter.Limit
+	if end > total {
+		end = total
+	}
+
+	// Slice
+	return results[offset:end], nil
+}
+
+// Update modifies a memory record.
+func (m *Manager) Update(ctx context.Context, id string, newContent string) error {
+	var rec *types.Record
+	var isLTM bool
+
+	// 1. Try LTM
+	if r, err := m.vectorStore.Get(ctx, id); err == nil {
+		rec = r
+		isLTM = true
+	} else {
+		// 2. Try STM
+		if r, err := m.stmStore.Get(ctx, id); err == nil {
+			rec = r
+			isLTM = false
+		} else {
+			return fmt.Errorf("record not found in LTM or STM")
+		}
+	}
+
+	// 3. Re-embed
+	// STM also uses embeddings in our 'Add' logic, so we should update it.
+	vector, err := m.embedder.EmbedQuery(ctx, newContent)
+	if err != nil {
+		return fmt.Errorf("failed to embed new content: %w", err)
+	}
+
+	// 4. Update fields
+	rec.Content = newContent
+	rec.Embedding = vector
+	// Keep Timestamp
+
+	// 5. Save
+	if isLTM {
+		if err := m.vectorStore.Update(ctx, *rec); err != nil {
+			return fmt.Errorf("failed to update LTM: %w", err)
+		}
+	} else {
+		if err := m.stmStore.Update(ctx, *rec); err != nil {
+			return fmt.Errorf("failed to update STM: %w", err)
+		}
+	}
+
+	return nil
 }
 
 // Delete removes a record from LTM by ID.

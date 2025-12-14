@@ -4,6 +4,7 @@ import (
 	"ai-memory/pkg/types"
 	"context"
 	"encoding/json"
+	"fmt"
 	"math"
 	"os"
 	"sort"
@@ -81,12 +82,48 @@ func (s *InMemoryVectorStore) Delete(ctx context.Context, ids []string) error {
 }
 
 // List retrieves all records.
-func (s *InMemoryVectorStore) List(ctx context.Context) ([]types.Record, error) {
+// List retrieves all records with filtering and pagination.
+func (s *InMemoryVectorStore) List(ctx context.Context, filter map[string]interface{}, limit int, offset int) ([]types.Record, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+
+	var filtered []types.Record
+	for _, rec := range s.records {
+		match := true
+		for k, v := range filter {
+			// Check specific fields first (type, user_id in metadata)
+			if k == "type" {
+				if string(rec.Type) != v.(string) {
+					match = false
+					break
+				}
+				continue
+			}
+			// Check metadata
+			if val, ok := rec.Metadata[k]; !ok || val != v {
+				match = false
+				break
+			}
+		}
+		if match {
+			filtered = append(filtered, rec)
+		}
+	}
+
+	// Apply Offset and Limit
+	total := len(filtered)
+	if offset >= total {
+		return []types.Record{}, nil
+	}
+
+	end := offset + limit
+	if end > total {
+		end = total
+	}
+
 	// Return a copy
-	results := make([]types.Record, len(s.records))
-	copy(results, s.records)
+	results := make([]types.Record, end-offset)
+	copy(results, filtered[offset:end])
 	return results, nil
 }
 
@@ -160,4 +197,37 @@ func cosineSimilarity(a, b []float32) float32 {
 		return 0.0
 	}
 	return dotProduct / (float32(math.Sqrt(float64(normA))) * float32(math.Sqrt(float64(normB))))
+}
+
+// Update modifies an existing record.
+func (s *InMemoryVectorStore) Update(ctx context.Context, record types.Record) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for i, r := range s.records {
+		if r.ID == record.ID {
+			// Update fields (Content, Metadata)
+			// Preserve Embedding if not provided? Or assume full replacement?
+			// Usually assume full replacement or specific merge. For now: Full replacement of fields provided.
+			// The interface takes Record.
+			s.records[i] = record
+			return nil
+		}
+	}
+	return fmt.Errorf("record not found")
+}
+
+// Get retrieves a record by ID.
+func (s *InMemoryVectorStore) Get(ctx context.Context, id string) (*types.Record, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	for _, r := range s.records {
+		if r.ID == id {
+			// Return copy
+			c := r
+			return &c, nil
+		}
+	}
+	return nil, fmt.Errorf("record not found")
 }
