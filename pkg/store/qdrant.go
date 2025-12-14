@@ -199,6 +199,53 @@ func (s *QdrantStore) Delete(ctx context.Context, ids []string) error {
 // but needed for Summarize/Clear interface.
 // Implementation using Scroll.
 func (s *QdrantStore) List(ctx context.Context) ([]types.Record, error) {
-	// This is expensive for large datasets.
-	return nil, fmt.Errorf("list not fully implemented for Qdrant")
+	var allPoints []*qdrant.RetrievedPoint
+	var nextOffset *qdrant.PointId
+
+	limit := uint32(100)
+	for {
+		scrollResult, err := s.client.GetPointsClient().Scroll(ctx, &qdrant.ScrollPoints{
+			CollectionName: s.collection,
+			Limit:          &limit,
+			Offset:         nextOffset,
+			WithPayload:    qdrant.NewWithPayload(true),
+		})
+		if err != nil {
+			return nil, err
+		}
+		allPoints = append(allPoints, scrollResult.Result...)
+		nextOffset = scrollResult.NextPageOffset
+		if nextOffset == nil {
+			break
+		}
+	}
+
+	var records []types.Record
+	for _, pt := range allPoints {
+		payload := pt.Payload
+
+		content := ""
+		if val, ok := payload["content"]; ok {
+			content = val.GetStringValue()
+		}
+
+		var ts time.Time
+		if val, ok := payload["timestamp"]; ok {
+			ts, _ = time.Parse(time.RFC3339, val.GetStringValue())
+		}
+
+		typeStr := ""
+		if val, ok := payload["type"]; ok {
+			typeStr = val.GetStringValue()
+		}
+
+		rec := types.Record{
+			ID:        pt.Id.GetUuid(),
+			Content:   content,
+			Type:      types.MemoryType(typeStr),
+			Timestamp: ts,
+		}
+		records = append(records, rec)
+	}
+	return records, nil
 }

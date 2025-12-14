@@ -1,0 +1,150 @@
+package api
+
+import (
+	"ai-memory/pkg/auth"
+	"ai-memory/pkg/memory"
+	"encoding/json"
+	"fmt"
+	"log"
+	"net/http"
+)
+
+type Server struct {
+	auth   *auth.Service
+	memory *memory.Manager
+	mux    *http.ServeMux
+}
+
+func NewServer(auth *auth.Service, mem *memory.Manager) *Server {
+	s := &Server{
+		auth:   auth,
+		memory: mem,
+		mux:    http.NewServeMux(),
+	}
+	s.routes()
+	return s
+}
+
+func (s *Server) routes() {
+	// API Group
+	s.mux.HandleFunc("/api/login", s.handleLogin)
+
+	// Protected Routes (TODO: Add Middleware)
+	// Protected Routes (TODO: Add Middleware)
+	s.mux.HandleFunc("GET /api/memories", s.handleListMemories)
+	s.mux.HandleFunc("POST /api/memories", s.handleAddMemory)
+	s.mux.HandleFunc("POST /api/retrieve", s.handleRetrieveMemory)
+	s.mux.HandleFunc("DELETE /api/memories/{id}", s.handleDeleteMemory)
+
+	// Static Files (Frontend) - Must be last to avoid catching API routes if not specific
+	// Use Go 1.22 pattern to match only root? No, FileServer handles generic.
+	// But /api/ is handled above.
+	fs := http.FileServer(http.Dir("./frontend/dist"))
+	s.mux.Handle("/", fs)
+}
+
+func (s *Server) Start(addr string) error {
+	server := &http.Server{
+		Addr:    addr,
+		Handler: s.mux,
+	}
+	log.Printf("Starting Admin API on %s", addr)
+	return server.ListenAndServe()
+}
+
+// Handlers
+
+func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var creds struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&creds); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	user, err := s.auth.Authenticate(creds.Username, creds.Password)
+	if err != nil {
+		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+		return
+	}
+
+	// TODO: Issue JWT or Session. For now, just return OK + User info
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message": "Login successful",
+		"user":    user,
+	})
+}
+
+func (s *Server) handleListMemories(w http.ResponseWriter, r *http.Request) {
+	memories, err := s.memory.List(r.Context())
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to list memories: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"memories": memories,
+	})
+}
+
+func (s *Server) handleDeleteMemory(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		http.Error(w, "Missing memory ID", http.StatusBadRequest)
+		return
+	}
+
+	if err := s.memory.Delete(r.Context(), id); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to delete memory: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"status": "deleted", "id": id})
+}
+
+func (s *Server) handleAddMemory(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		UserID    string `json:"user_id"`
+		SessionID string `json:"session_id"`
+		Input     string `json:"input"`
+		Output    string `json:"output"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	if err := s.memory.Add(r.Context(), payload.UserID, payload.SessionID, payload.Input, payload.Output, nil); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to add memory: %v", err), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusCreated)
+}
+
+func (s *Server) handleRetrieveMemory(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		UserID    string `json:"user_id"`
+		SessionID string `json:"session_id"`
+		Query     string `json:"query"`
+		Limit     int    `json:"limit"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	results, err := s.memory.Retrieve(r.Context(), payload.UserID, payload.SessionID, payload.Query, payload.Limit)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to retrieve: %v", err), http.StatusInternalServerError)
+		return
+	}
+	json.NewEncoder(w).Encode(map[string]interface{}{"results": results})
+}

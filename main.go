@@ -5,11 +5,14 @@ import (
 	"fmt"
 	"log"
 
+	"ai-memory/pkg/api"
+	"ai-memory/pkg/auth"
 	"ai-memory/pkg/config"
+
 	"ai-memory/pkg/llm"
+
 	"ai-memory/pkg/memory"
 	"ai-memory/pkg/store"
-	"ai-memory/pkg/types"
 )
 
 func main() {
@@ -28,6 +31,32 @@ func main() {
 		log.Printf("Warning: Redis connection failed: %v. Ensure Redis is running at %s", err, cfg.RedisAddr)
 	} else {
 		fmt.Println(" Connected to Redis (STM)")
+	}
+
+	// MySQL (Auth & Admin)
+	mysqlDB, err := store.NewMySQLStore(cfg)
+	if err != nil {
+		log.Printf("Warning: MySQL connection failed: %v", err)
+	} else {
+		fmt.Println(" Connected to MySQL")
+	}
+
+	// Initialize Auth Service
+	var authService *auth.Service
+	if mysqlDB != nil {
+		authService = auth.NewService(mysqlDB)
+		if err := authService.InitSchema(); err != nil {
+			log.Printf("Warning: Failed to init auth schema: %v", err)
+		} else {
+			// Check if we need to seed a default admin?
+			// For now just logging.
+			fmt.Println(" Auth Schema Initialized")
+
+			// Seed Default Admin
+			if err := authService.CreateUser("admin", "admin123"); err == nil {
+				fmt.Println(" Default Admin Created: admin / admin123")
+			}
+		}
 	}
 
 	// OpenAI (LLM & Embedder)
@@ -77,8 +106,18 @@ func main() {
 	// 3. Create Manager
 	manager := memory.NewManager(cfg, vectorStore, redisStore, embedderClient, llmClient)
 
-	// 4. Interactive Demo Flow
-	runDemo(ctx, manager)
+	// 4. Start Admin API
+	if authService != nil {
+		apiServer := api.NewServer(authService, manager)
+		go func() {
+			if err := apiServer.Start(":8080"); err != nil {
+				log.Printf("API Server failed: %v", err)
+			}
+		}()
+		fmt.Println(" Admin API Server started (background)")
+	} else {
+		log.Println("Warning: Auth service not available, Admin API will not start.")
+	}
 
 	// 5. Save LTM State (Only for In-Memory)
 	if ims, ok := vectorStore.(*store.InMemoryVectorStore); ok {
@@ -86,78 +125,12 @@ func main() {
 			log.Printf("Failed to save LTM: %v", err)
 		}
 	}
-}
 
-const DemoUserID = "demo_user"
-const SessionA = "session_a"
-const SessionB = "session_b"
-
-func runDemo(ctx context.Context, m *memory.Manager) {
-	fmt.Printf("=== Starting Demo for User: %s, Sessions: %s, %s ===\n", DemoUserID, SessionA, SessionB)
-
-	// 1. Add to Session A (Coding Context)
-	fmt.Println("\n--- [Session A] Adding Interactions ---")
-	inputsA := []struct{ in, out string }{
-		{"I want to write a Go server.", "I can help. Let's use net/http."},
-		{"Do I need a framework?", "Standard library is often enough for simple services."},
-	}
-	for _, p := range inputsA {
-		if err := m.Add(ctx, DemoUserID, SessionA, p.in, p.out, nil); err != nil {
-			log.Printf("Error adding to Session A: %v", err)
-		}
-	}
-
-	// 2. Add to Session B (Creative Context)
-	fmt.Println("\n--- [Session B] Adding Interactions ---")
-	inputsB := []struct{ in, out string }{
-		{"Write a poem about rust (the metal).", "Iron red, oxidation spreads..."},
-	}
-	for _, p := range inputsB {
-		if err := m.Add(ctx, DemoUserID, SessionB, p.in, p.out, nil); err != nil {
-			log.Printf("Error adding to Session B: %v", err)
-		}
-	}
-
-	// 3. Retrieve Session A (Should NOT see B)
-	fmt.Println("\n--- [Session A] Retrieving Context ---")
-	resultsA, _ := m.Retrieve(ctx, DemoUserID, SessionA, "context", 5)
-	for i, r := range resultsA {
-		fmt.Printf("[%d] [%s] %s\n", i, r.Type, r.Content)
-	}
-
-	// 4. Retrieve Session B (Should NOT see A)
-	fmt.Println("\n--- [Session B] Retrieving Context ---")
-	resultsB, _ := m.Retrieve(ctx, DemoUserID, SessionB, "context", 5)
-	for i, r := range resultsB {
-		fmt.Printf("[%d] [%s] %s\n", i, r.Type, r.Content)
-	}
-
-	// 5. Summarize Session A -> LTM
-	fmt.Println("\n--- [Session A] Triggering Summarization ---")
-	// Add more inputs to trigger threshold if needed, or force it
-	// Just calling Summarize manually
-	if err := m.Summarize(ctx, DemoUserID, SessionA); err != nil {
-		log.Printf("Session A Summary Error (might be not enough items): %v", err)
+	// Keep the server running
+	if authService != nil {
+		fmt.Println("Server is running at http://localhost:8080")
+		select {} // Block forever
 	} else {
-		fmt.Println("Session A Summarized.")
-	}
-
-	// 6. Verify Session A STM Cleared
-	resultsA2, _ := m.Retrieve(ctx, DemoUserID, SessionA, "context", 5)
-	if len(resultsA2) == 0 { // Actually might get LTM results now
-		fmt.Println("\n--- [Session A] Post-Summary: STM should be empty, seeing LTM ---")
-	}
-	for i, r := range resultsA2 {
-		fmt.Printf("[%d] [%s] %s\n", i, r.Type, r.Content)
-	}
-
-	// 7. Verify Session B can see Session A's Summary (via shared User LTM)
-	fmt.Println("\n--- [Session B] Retrieving (Checking for A's Summary) ---")
-	resultsB2, _ := m.Retrieve(ctx, DemoUserID, SessionB, "Go server", 5)
-	for i, r := range resultsB2 {
-		fmt.Printf("[%d] [%s] %s\n", i, r.Type, r.Content)
-		if r.Type == types.LongTerm || r.Type == types.Entity {
-			fmt.Println("  -> Confirmed: Session B accessed User LTM.")
-		}
+		fmt.Println("Server finished (Admin API not started due to missing MySQL connection).")
 	}
 }

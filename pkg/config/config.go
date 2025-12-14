@@ -24,6 +24,12 @@ type Config struct {
 	ContextWindow        int // Number of messages to keep in STM
 	MinSummaryItems      int // Items required to trigger summary
 	MaxRecentMemories    int // Max memories to retrieve (Recall limit)
+
+	// Database Configuration
+	DBHost string
+	DBUser string
+	DBPass string
+	DBName string
 }
 
 func Load() (*Config, error) {
@@ -51,6 +57,10 @@ func Load() (*Config, error) {
 		QdrantAddr:           getEnv("QDRANT_ADDR", "localhost"), // Client usually adds port, but let's verify usage
 		QdrantCollection:     getEnv("QDRANT_COLLECTION", "ai_memory"),
 		VectorStoreProvider:  getEnv("VECTOR_STORE_PROVIDER", "in_memory"),
+		DBHost:               getEnv("DB_HOST", "localhost:3306"),
+		DBUser:               getEnv("DB_USER", "root"),
+		DBPass:               getEnv("DB_PASS", ""),
+		DBName:               getEnv("DB_NAME", "ai_memory"),
 	}, nil
 }
 

@@ -16,6 +16,12 @@ type Memory interface {
 	// Summarize triggers a consolidation of short-term memories into long-term storage.
 	Summarize(ctx context.Context, userID string, sessionID string) error
 
+	// List retrieves all long-term memories (for admin).
+	List(ctx context.Context) ([]types.Record, error)
+
+	// Delete removes a memory record by ID.
+	Delete(ctx context.Context, id string) error
+
 	// Clear resets the memory storage.
 	Clear(ctx context.Context, userID string, sessionID string) error
 }

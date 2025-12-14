@@ -191,6 +191,16 @@ func (m *Manager) Summarize(ctx context.Context, userID string, sessionID string
 	return nil
 }
 
+// List retrieves all LTM records.
+func (m *Manager) List(ctx context.Context) ([]types.Record, error) {
+	return m.vectorStore.List(ctx)
+}
+
+// Delete removes a record from LTM by ID.
+func (m *Manager) Delete(ctx context.Context, id string) error {
+	return m.vectorStore.Delete(ctx, []string{id})
+}
+
 // Clear resets both stores.
 func (m *Manager) Clear(ctx context.Context, userID string, sessionID string) error {
 	key := fmt.Sprintf("memory:stm:%s:%s", userID, sessionID)
