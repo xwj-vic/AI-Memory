@@ -88,6 +88,8 @@ func main() {
 	}
 }
 
+const DemoUserID = "demo_user"
+
 func runDemo(ctx context.Context, m *memory.Manager) {
 	// Add interactions
 	fmt.Println("\n--- Adding New Memories ---")
@@ -103,7 +105,7 @@ func runDemo(ctx context.Context, m *memory.Manager) {
 	}
 
 	for _, p := range inputs {
-		if err := m.Add(ctx, p.in, p.out, nil); err != nil {
+		if err := m.Add(ctx, DemoUserID, p.in, p.out, nil); err != nil {
 			log.Printf("Error adding memory: %v", err)
 		} else {
 			fmt.Print(".")
@@ -114,7 +116,7 @@ func runDemo(ctx context.Context, m *memory.Manager) {
 
 	// Retrieve
 	fmt.Println("\n--- Retrieving Context (STM + LTM) ---")
-	results, err := m.Retrieve(ctx, "What logic am I using for implementation?", 5)
+	results, err := m.Retrieve(ctx, DemoUserID, "What logic am I using for implementation?", 5)
 	if err != nil {
 		log.Printf("Error retrieving: %v", err)
 	}
@@ -124,7 +126,7 @@ func runDemo(ctx context.Context, m *memory.Manager) {
 
 	// Summarize
 	fmt.Println("\n--- Triggering Logic: Summarization (STM -> LTM) ---")
-	if err := m.Summarize(ctx); err != nil {
+	if err := m.Summarize(ctx, DemoUserID); err != nil {
 		log.Printf("Error summarizing: %v", err)
 	} else {
 		fmt.Println("Summarization complete.")
@@ -132,7 +134,7 @@ func runDemo(ctx context.Context, m *memory.Manager) {
 
 	// Retrieve Again (Should see LTM now)
 	fmt.Println("\n--- Retrieving After Summary ---")
-	results2, err := m.Retrieve(ctx, "What logic am I using for implementation?", 5)
+	results2, err := m.Retrieve(ctx, DemoUserID, "What logic am I using for implementation?", 5)
 	if err != nil {
 		log.Printf("Error retrieving: %v", err)
 	}

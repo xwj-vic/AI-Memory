@@ -91,7 +91,7 @@ func (s *InMemoryVectorStore) List(ctx context.Context) ([]types.Record, error) 
 }
 
 // Search finds the nearest neighbors using cosine similarity.
-func (s *InMemoryVectorStore) Search(ctx context.Context, vector []float32, limit int, scoreThreshold float32) ([]types.Record, error) {
+func (s *InMemoryVectorStore) Search(ctx context.Context, vector []float32, limit int, scoreThreshold float32, filters map[string]interface{}) ([]types.Record, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -106,6 +106,22 @@ func (s *InMemoryVectorStore) Search(ctx context.Context, vector []float32, limi
 		if rec.Embedding == nil {
 			continue
 		}
+
+		// Apply filters
+		match := true
+		for k, v := range filters {
+			// Check metadata
+			if val, ok := rec.Metadata[k]; !ok || val != v {
+				// Special check for top-level fields if needed, but here assuming metadata filtering
+				// If we want to filter by "user_id" which might be in Metadata
+				match = false
+				break
+			}
+		}
+		if !match {
+			continue
+		}
+
 		score := cosineSimilarity(vector, rec.Embedding)
 		if score >= scoreThreshold {
 			results = append(results, result{record: rec, score: score})

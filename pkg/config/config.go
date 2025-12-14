@@ -23,6 +23,7 @@ type Config struct {
 	VectorStoreProvider  string
 	ContextWindow        int // Number of messages to keep in STM
 	MinSummaryItems      int // Items required to trigger summary
+	MaxRecentMemories    int // Max memories to retrieve (Recall limit)
 }
 
 func Load() (*Config, error) {
@@ -31,6 +32,7 @@ func Load() (*Config, error) {
 	db, _ := strconv.Atoi(getEnv("REDIS_DB", "0"))
 	ctxWindow, _ := strconv.Atoi(getEnv("STM_CONTEXT_WINDOW", "10"))
 	minSummary, _ := strconv.Atoi(getEnv("MIN_SUMMARY_ITEMS", "5"))
+	maxRecent, _ := strconv.Atoi(getEnv("MAX_RECENT_MEMORIES", "100"))
 
 	return &Config{
 		RedisAddr:            getEnv("REDIS_ADDR", "localhost:6379"),
@@ -45,6 +47,7 @@ func Load() (*Config, error) {
 		ExtractProfilePrompt: getEnv("EXTRACT_PROFILE_PROMPT", "Analyze the following interaction. Identify any persistent user preferences, traits, or facts that should be remembered for future personalization. Return ONLY these facts as a bulleted list. If none, return 'None'.\n\n%s"),
 		ContextWindow:        ctxWindow,
 		MinSummaryItems:      minSummary,
+		MaxRecentMemories:    maxRecent,
 		QdrantAddr:           getEnv("QDRANT_ADDR", "localhost"), // Client usually adds port, but let's verify usage
 		QdrantCollection:     getEnv("QDRANT_COLLECTION", "ai_memory"),
 		VectorStoreProvider:  getEnv("VECTOR_STORE_PROVIDER", "in_memory"),

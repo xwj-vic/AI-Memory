@@ -8,22 +8,22 @@ import (
 // Memory is the high-level interface for interacting with the agent's memory.
 type Memory interface {
 	// Add stores a new interaction or observation.
-	Add(ctx context.Context, input string, output string, metadata map[string]interface{}) error
+	Add(ctx context.Context, userID string, input string, output string, metadata map[string]interface{}) error
 
 	// Retrieve finds relevant memories based on a query.
-	Retrieve(ctx context.Context, query string, limit int) ([]types.Record, error)
+	Retrieve(ctx context.Context, userID string, query string, limit int) ([]types.Record, error)
 
 	// Summarize triggers a consolidation of short-term memories into long-term storage.
-	Summarize(ctx context.Context) error
+	Summarize(ctx context.Context, userID string) error
 
 	// Clear resets the memory storage.
-	Clear(ctx context.Context) error
+	Clear(ctx context.Context, userID string) error
 }
 
 // VectorStore abstracts the underlying vector database.
 type VectorStore interface {
 	// Search finds the nearest neighbors to the given vector.
-	Search(ctx context.Context, vector []float32, limit int, scoreThreshold float32) ([]types.Record, error)
+	Search(ctx context.Context, vector []float32, limit int, scoreThreshold float32, filters map[string]interface{}) ([]types.Record, error)
 
 	// Add stores records with their embeddings.
 	Add(ctx context.Context, records []types.Record) error

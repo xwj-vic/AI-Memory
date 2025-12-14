@@ -105,13 +105,40 @@ func (s *QdrantStore) Add(ctx context.Context, records []types.Record) error {
 	return nil
 }
 
-func (s *QdrantStore) Search(ctx context.Context, vector []float32, limit int, scoreThreshold float32) ([]types.Record, error) {
+func (s *QdrantStore) Search(ctx context.Context, vector []float32, limit int, scoreThreshold float32, filters map[string]interface{}) ([]types.Record, error) {
+	// Build Filter
+	var qdrantFilter *qdrant.Filter
+	if len(filters) > 0 {
+		var conditions []*qdrant.Condition
+		for k, v := range filters {
+			// Create a match condition for each filter
+			// Assuming exact match for string/int values
+			valStr := fmt.Sprintf("%v", v)
+			conditions = append(conditions, &qdrant.Condition{
+				ConditionOneOf: &qdrant.Condition_Field{
+					Field: &qdrant.FieldCondition{
+						Key: k,
+						Match: &qdrant.Match{
+							MatchValue: &qdrant.Match_Keyword{
+								Keyword: valStr,
+							},
+						},
+					},
+				},
+			})
+		}
+		qdrantFilter = &qdrant.Filter{
+			Must: conditions,
+		}
+	}
+
 	searchResult, err := s.client.GetPointsClient().Search(ctx, &qdrant.SearchPoints{
 		CollectionName: s.collection,
 		Vector:         vector,
 		Limit:          uint64(limit),
 		ScoreThreshold: &scoreThreshold,
 		WithPayload:    qdrant.NewWithPayload(true),
+		Filter:         qdrantFilter,
 	})
 	if err != nil {
 		return nil, err
