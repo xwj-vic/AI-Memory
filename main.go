@@ -56,8 +56,8 @@ func main() {
 		if err != nil {
 			log.Fatalf("Failed to initialize Qdrant: %v", err)
 		}
-		// Ensure collection exists. Vector size 1536 for OpenAI ada-002
-		if err := qs.Init(ctx, 1536); err != nil {
+		// Ensure collection exists. Vector size 1024 for BAAI/bge-m3
+		if err := qs.Init(ctx, 1024); err != nil {
 			log.Fatalf("Failed to init Qdrant collection: %v", err)
 		}
 		vectorStore = qs

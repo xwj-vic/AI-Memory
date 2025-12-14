@@ -19,3 +19,7 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+
+# Data
+storage/
+memory.json

@@ -94,6 +94,7 @@ func (s *QdrantStore) Add(ctx context.Context, records []types.Record) error {
 	operationInfo, err := s.client.Upsert(ctx, &qdrant.UpsertPoints{
 		CollectionName: s.collection,
 		Points:         points,
+		Wait:           func(b bool) *bool { return &b }(true),
 	})
 	if err != nil {
 		return err
