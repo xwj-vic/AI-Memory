@@ -3,6 +3,7 @@ package memory
 import (
 	"ai-memory/pkg/types"
 	"context"
+	"time"
 )
 
 // Memory is the high-level interface for interacting with the agent's memory.
@@ -45,6 +46,8 @@ type VectorStore interface {
 
 	// Get retrieves a record by ID.
 	Get(ctx context.Context, id string) (*types.Record, error)
+	// Count returns the number of records matching a filter.
+	Count(ctx context.Context, filter map[string]interface{}) (int64, error)
 }
 
 // KVStore abstracts key-value storage for metadata or raw logs.
@@ -66,6 +69,24 @@ type ListStore interface {
 
 	// Get searches for a record by ID across all lists.
 	Get(ctx context.Context, id string) (*types.Record, error)
+}
+
+// EndUser represents a user interacting with the AI.
+type EndUser struct {
+	ID             int       `json:"id"`
+	UserIdentifier string    `json:"user_identifier"`
+	LastActive     time.Time `json:"last_active"`
+	CreatedAt      time.Time `json:"created_at"`
+	// Stats (not in DB)
+	SessionCount int `json:"session_count"`
+	LTMCount     int `json:"ltm_count"`
+}
+
+// EndUserStore manages end users in persistent storage (MySQL).
+type EndUserStore interface {
+	Init() error
+	UpsertUser(ctx context.Context, identifier string) error
+	ListUsers(ctx context.Context) ([]EndUser, error)
 }
 
 // Embedder abstracts the text embedding model provider.

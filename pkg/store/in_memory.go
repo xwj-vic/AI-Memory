@@ -229,5 +229,40 @@ func (s *InMemoryVectorStore) Get(ctx context.Context, id string) (*types.Record
 			return &c, nil
 		}
 	}
-	return nil, fmt.Errorf("record not found")
+	return nil, fmt.Errorf("not found")
+}
+
+func (s *InMemoryVectorStore) Count(ctx context.Context, filters map[string]interface{}) (int64, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var count int64
+	for _, rec := range s.records {
+		match := true
+		for k, v := range filters {
+			// Handle user_id special case if needed, but in-memory usually matches flat metadata or similar
+			// Assuming metadata check:
+			if k == "user_id" {
+				if val, ok := rec.Metadata["user_id"]; !ok || val != v {
+					match = false
+					break
+				}
+			} else if k == "type" {
+				if string(rec.Type) != v { // Assuming v is string
+					match = false
+					break
+				}
+			} else {
+				// Genetic metadata match
+				if val, ok := rec.Metadata[k]; !ok || val != v {
+					match = false
+					break
+				}
+			}
+		}
+		if match {
+			count++
+		}
+	}
+	return count, nil
 }

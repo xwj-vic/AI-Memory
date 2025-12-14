@@ -1,15 +1,29 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import Login from './views/Login.vue'
-import Dashboard from './views/Dashboard.vue'
+import AdminLayout from './layouts/AdminLayout.vue'
+import MemoryExplorer from './views/MemoryExplorer.vue'
+import Users from './views/Users.vue'
+import Status from './views/Status.vue'
 
 const routes = [
-    { path: '/login', component: Login },
-    { path: '/dashboard', component: Dashboard, meta: { requiresAuth: true } },
-    { path: '/', redirect: '/dashboard' }
+    { path: '/login', component: Login, meta: { title: 'AI Memory Admin Login' } },
+    {
+        path: '/admin',
+        component: AdminLayout,
+        meta: { requiresAuth: true },
+        children: [
+            { path: 'memory', component: MemoryExplorer },
+            { path: 'users', component: Users },
+            { path: 'status', component: Status },
+            { path: '', redirect: 'memory' }
+        ]
+    },
+    { path: '/', redirect: '/admin' },
+    { path: '/dashboard', redirect: '/admin' }
 ]
 
 const router = createRouter({
-    history: createWebHashHistory(), // Use hash history for simpler static file serving without server config
+    history: createWebHashHistory(),
     routes
 })
 

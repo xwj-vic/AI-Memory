@@ -104,7 +104,17 @@ func main() {
 	}
 
 	// 3. Create Manager
-	manager := memory.NewManager(cfg, vectorStore, redisStore, embedderClient, llmClient)
+	// Infrastructure for End Users (MySQL)
+	var endUserStore memory.EndUserStore
+	if mysqlDB != nil {
+		eus := store.NewMySQLEndUserStore(mysqlDB)
+		if err := eus.Init(); err != nil {
+			log.Printf("Failed to init end_users table: %v", err)
+		}
+		endUserStore = eus
+	}
+
+	manager := memory.NewManager(cfg, vectorStore, redisStore, endUserStore, embedderClient, llmClient)
 
 	// 4. Start Admin API
 	if authService != nil {

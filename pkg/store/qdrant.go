@@ -399,3 +399,41 @@ func (s *QdrantStore) Get(ctx context.Context, id string) (*types.Record, error)
 
 	return &rec, nil
 }
+
+func (s *QdrantStore) Count(ctx context.Context, filters map[string]interface{}) (int64, error) {
+	// Build Filter (Same logic as List/Search)
+	var qdrantFilter *qdrant.Filter
+	if len(filters) > 0 {
+		var conditions []*qdrant.Condition
+		for k, v := range filters {
+			valStr := fmt.Sprintf("%v", v)
+			key := k
+			if k == "user_id" {
+				key = "metadata.user_id"
+			}
+			conditions = append(conditions, &qdrant.Condition{
+				ConditionOneOf: &qdrant.Condition_Field{
+					Field: &qdrant.FieldCondition{
+						Key: key,
+						Match: &qdrant.Match{
+							MatchValue: &qdrant.Match_Keyword{
+								Keyword: valStr,
+							},
+						},
+					},
+				},
+			})
+		}
+		qdrantFilter = &qdrant.Filter{Must: conditions}
+	}
+
+	countResult, err := s.client.GetPointsClient().Count(ctx, &qdrant.CountPoints{
+		CollectionName: s.collection,
+		Filter:         qdrantFilter,
+		Exact:          func(b bool) *bool { return &b }(true),
+	})
+	if err != nil {
+		return 0, err
+	}
+	return int64(countResult.Result.Count), nil
+}

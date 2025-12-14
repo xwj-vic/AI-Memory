@@ -16,3 +16,11 @@ CREATE TABLE IF NOT EXISTS users (
 -- Password: admin123
 INSERT INTO users (username, password_hash) VALUES ('admin', '$2a$10$FrMJpuNsOfEY.5edOFDoSOWsswfLVPG.MutG8xNcXtcZrc75YyYxu') ON DUPLICATE KEY UPDATE id=id;
 
+-- 5. End Users Table (Tracks users interacting with the AI)
+CREATE TABLE IF NOT EXISTS end_users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_identifier VARCHAR(255) NOT NULL UNIQUE,
+    last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+

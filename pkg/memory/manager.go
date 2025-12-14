@@ -16,22 +16,24 @@ import (
 
 // Manager implements the Memory interface.
 type Manager struct {
-	cfg         *config.Config
-	prompts     *prompts.Registry
-	vectorStore VectorStore
-	stmStore    ListStore
-	embedder    Embedder
-	llm         llm.LLM
+	cfg          *config.Config
+	prompts      *prompts.Registry
+	vectorStore  VectorStore
+	stmStore     ListStore
+	endUserStore EndUserStore
+	embedder     Embedder
+	llm          llm.LLM
 }
 
-func NewManager(cfg *config.Config, vStore VectorStore, lStore ListStore, embedder Embedder, llmModel llm.LLM) *Manager {
+func NewManager(cfg *config.Config, vStore VectorStore, lStore ListStore, uStore EndUserStore, embedder Embedder, llmModel llm.LLM) *Manager {
 	return &Manager{
-		cfg:         cfg,
-		prompts:     prompts.NewRegistry(cfg.SummarizePrompt, cfg.ExtractProfilePrompt),
-		vectorStore: vStore,
-		stmStore:    lStore,
-		embedder:    embedder,
-		llm:         llmModel,
+		cfg:          cfg,
+		prompts:      prompts.NewRegistry(cfg.SummarizePrompt, cfg.ExtractProfilePrompt),
+		vectorStore:  vStore,
+		stmStore:     lStore,
+		endUserStore: uStore,
+		embedder:     embedder,
+		llm:          llmModel,
 	}
 }
 
@@ -67,6 +69,11 @@ func (m *Manager) Add(ctx context.Context, userID string, sessionID string, inpu
 	key := fmt.Sprintf("memory:stm:%s:%s", userID, sessionID)
 	if err := m.stmStore.RPush(ctx, key, data); err != nil {
 		return fmt.Errorf("failed to add to STM: %w", err)
+	}
+
+	// Update EndUser Activity
+	if m.endUserStore != nil {
+		_ = m.endUserStore.UpsertUser(ctx, userID)
 	}
 
 	return nil
@@ -377,4 +384,55 @@ func (m *Manager) Clear(ctx context.Context, userID string, sessionID string) er
 	}
 	fmt.Printf("STM cleared for user %s session %s.\n", userID, sessionID)
 	return nil
+}
+
+// GetUsers returns list of end users with stats.
+func (m *Manager) GetUsers(ctx context.Context) ([]EndUser, error) {
+	if m.endUserStore == nil {
+		return nil, fmt.Errorf("end user store not initialized")
+	}
+
+	// 1. Fetch Users from MySQL
+	users, err := m.endUserStore.ListUsers(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// 2. Enrich with Stats
+	for i := range users {
+		u := &users[i]
+
+		// STM Sessions Count
+		// Pattern: memory:stm:<UserID>:*
+		pattern := fmt.Sprintf("memory:stm:%s:*", u.UserIdentifier)
+		keys, _ := m.stmStore.ScanKeys(ctx, pattern)
+		u.SessionCount = len(keys)
+
+		// LTM Count
+		count, _ := m.vectorStore.Count(ctx, map[string]interface{}{"user_id": u.UserIdentifier})
+		u.LTMCount = int(count)
+	}
+
+	return users, nil
+}
+
+// GetSystemStatus returns basic health info.
+func (m *Manager) GetSystemStatus(ctx context.Context) map[string]string {
+	status := make(map[string]string)
+
+	// Check STM
+	if _, err := m.stmStore.ScanKeys(ctx, "test"); err != nil {
+		status["ShortTermMemory"] = "Down"
+	} else {
+		status["ShortTermMemory"] = "Online"
+	}
+
+	// Check LTM
+	if _, err := m.vectorStore.List(ctx, map[string]interface{}{}, 1, 0); err != nil {
+		status["LongTermMemory"] = "Down / Error"
+	} else {
+		status["LongTermMemory"] = "Online"
+	}
+
+	return status
 }

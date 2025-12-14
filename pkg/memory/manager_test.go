@@ -25,7 +25,8 @@ func TestManager_DemoFlow(t *testing.T) {
 	vStore := store.NewInMemoryVectorStore()
 	lStore := store.NewInMemoryListStore()
 
-	m := memory.NewManager(cfg, vStore, lStore, mockLLM, mockLLM)
+	// Pass nil for EndUserStore
+	m := memory.NewManager(cfg, vStore, lStore, nil, mockLLM, mockLLM)
 
 	ctx := context.Background()
 	userID := "test_user"
@@ -122,7 +123,7 @@ func TestManager_ListFiltering(t *testing.T) {
 	vStore := store.NewInMemoryVectorStore()
 	lStore := store.NewInMemoryListStore()
 
-	m := memory.NewManager(cfg, vStore, lStore, mockLLM, mockLLM)
+	m := memory.NewManager(cfg, vStore, lStore, nil, mockLLM, mockLLM)
 	ctx := context.Background()
 
 	// Seed Data
@@ -186,7 +187,7 @@ func TestManager_Update(t *testing.T) {
 	mockLLM := &llm.MockLLM{}
 	vStore := store.NewInMemoryVectorStore()
 	lStore := store.NewInMemoryListStore()
-	m := memory.NewManager(cfg, vStore, lStore, mockLLM, mockLLM)
+	m := memory.NewManager(cfg, vStore, lStore, nil, mockLLM, mockLLM)
 	ctx := context.Background()
 
 	// 1. Create LTM (Simulate via Summarize is hard, use manual Add to vStore or hack)
@@ -236,7 +237,7 @@ func TestManager_Update_STM(t *testing.T) {
 	mockLLM := &llm.MockLLM{}
 	vStore := store.NewInMemoryVectorStore()
 	lStore := store.NewInMemoryListStore()
-	m := memory.NewManager(cfg, vStore, lStore, mockLLM, mockLLM)
+	m := memory.NewManager(cfg, vStore, lStore, nil, mockLLM, mockLLM)
 	ctx := context.Background()
 
 	// 1. Add to STM via Manager

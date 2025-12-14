@@ -37,6 +37,10 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/retrieve", s.handleRetrieveMemory)
 	s.mux.HandleFunc("DELETE /api/memories/{id}", s.handleDeleteMemory)
 
+	// Admin Endpoints
+	s.mux.HandleFunc("GET /api/users", s.handleGetUsers)
+	s.mux.HandleFunc("GET /api/status", s.handleGetStatus)
+
 	// Static Files (Frontend) - Must be last to avoid catching API routes if not specific
 	fs := http.FileServer(http.Dir("./frontend/dist"))
 	s.mux.Handle("/", fs)
@@ -64,6 +68,20 @@ func (s *Server) handleUpdateMemory(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"status": "updated"})
+}
+
+func (s *Server) handleGetUsers(w http.ResponseWriter, r *http.Request) {
+	users, err := s.memory.GetUsers(r.Context())
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to fetch users: %v", err), http.StatusInternalServerError)
+		return
+	}
+	json.NewEncoder(w).Encode(map[string]interface{}{"users": users})
+}
+
+func (s *Server) handleGetStatus(w http.ResponseWriter, r *http.Request) {
+	status := s.memory.GetSystemStatus(r.Context())
+	json.NewEncoder(w).Encode(status)
 }
 
 func (s *Server) Start(addr string) error {
