@@ -8,28 +8,55 @@ import (
 )
 
 type Config struct {
-	RedisAddr            string
-	RedisPassword        string
-	RedisDB              int
+	// Redis
+	RedisAddr     string
+	RedisPassword string
+	RedisDB       int
+
+	// LLM Provider
 	OpenAIKey            string
 	OpenAIBaseURL        string
 	OpenAIModel          string
 	OpenAIEmbeddingModel string
 	LLMProvider          string
-	SummarizePrompt      string
-	ExtractProfilePrompt string
-	QdrantAddr           string // ... existing fields
-	QdrantCollection     string
-	VectorStoreProvider  string
-	ContextWindow        int // Number of messages to keep in STM
-	MinSummaryItems      int // Items required to trigger summary
-	MaxRecentMemories    int // Max memories to retrieve (Recall limit)
 
-	// Database Configuration
+	// Vector Store
+	QdrantAddr          string
+	QdrantCollection    string
+	VectorStoreProvider string
+
+	// Database
 	DBHost string
 	DBUser string
 	DBPass string
 	DBName string
+
+	// Legacy STM settings (仍在Retrieve中使用)
+	ContextWindow        int    // STM召回窗口大小
+	MinSummaryItems      int    // 触发Summary的最小条目数
+	MaxRecentMemories    int    // 召回记忆数量限制
+	SummarizePrompt      string // Summarize prompt模板
+	ExtractProfilePrompt string // 实体提取prompt模板
+
+	// STM配置
+	STMWindowSize       int // STM滑动窗口大小
+	STMMaxRetentionDays int // STM最大保留天数
+	STMBatchJudgeSize   int // 批量判定大小
+
+	// Staging配置
+	StagingMinOccurrences int     // Staging最小出现次数
+	StagingMinWaitHours   int     // Staging最小等待时长(小时)
+	StagingValueThreshold float64 // 价值分数阈值
+	StagingConfidenceHigh float64 // 高信心阈值
+	StagingConfidenceLow  float64 // 低信心阈值
+
+	// LTM衰减配置
+	LTMDecayHalfLifeDays int     // LTM衰减半衰期(天)
+	LTMDecayMinScore     float64 // LTM删除阈值
+
+	// LLM判定模型配置
+	JudgeModel       string // LLM判定模型
+	ExtractTagsModel string // 标签提取模型
 }
 
 func Load() (*Config, error) {
@@ -39,6 +66,20 @@ func Load() (*Config, error) {
 	ctxWindow, _ := strconv.Atoi(getEnv("STM_CONTEXT_WINDOW", "10"))
 	minSummary, _ := strconv.Atoi(getEnv("MIN_SUMMARY_ITEMS", "5"))
 	maxRecent, _ := strconv.Atoi(getEnv("MAX_RECENT_MEMORIES", "100"))
+
+	// 漏斗型配置
+	stmWindowSize, _ := strconv.Atoi(getEnv("STM_WINDOW_SIZE", "100"))
+	stmMaxRetentionDays, _ := strconv.Atoi(getEnv("STM_MAX_RETENTION_DAYS", "7"))
+	stmBatchJudgeSize, _ := strconv.Atoi(getEnv("STM_BATCH_JUDGE_SIZE", "10"))
+
+	stagingMinOccurrences, _ := strconv.Atoi(getEnv("STAGING_MIN_OCCURRENCES", "2"))
+	stagingMinWaitHours, _ := strconv.Atoi(getEnv("STAGING_MIN_WAIT_HOURS", "48"))
+	stagingValueThreshold, _ := strconv.ParseFloat(getEnv("STAGING_VALUE_THRESHOLD", "0.6"), 64)
+	stagingConfidenceHigh, _ := strconv.ParseFloat(getEnv("STAGING_CONFIDENCE_HIGH", "0.8"), 64)
+	stagingConfidenceLow, _ := strconv.ParseFloat(getEnv("STAGING_CONFIDENCE_LOW", "0.5"), 64)
+
+	ltmDecayHalfLifeDays, _ := strconv.Atoi(getEnv("LTM_DECAY_HALF_LIFE_DAYS", "90"))
+	ltmDecayMinScore, _ := strconv.ParseFloat(getEnv("LTM_DECAY_MIN_SCORE", "0.3"), 64)
 
 	return &Config{
 		RedisAddr:            getEnv("REDIS_ADDR", "localhost:6379"),
@@ -61,6 +102,20 @@ func Load() (*Config, error) {
 		DBUser:               getEnv("DB_USER", "root"),
 		DBPass:               getEnv("DB_PASS", ""),
 		DBName:               getEnv("DB_NAME", "ai_memory"),
+
+		// 漏斗型配置
+		STMWindowSize:         stmWindowSize,
+		STMMaxRetentionDays:   stmMaxRetentionDays,
+		STMBatchJudgeSize:     stmBatchJudgeSize,
+		StagingMinOccurrences: stagingMinOccurrences,
+		StagingMinWaitHours:   stagingMinWaitHours,
+		StagingValueThreshold: stagingValueThreshold,
+		StagingConfidenceHigh: stagingConfidenceHigh,
+		StagingConfidenceLow:  stagingConfidenceLow,
+		LTMDecayHalfLifeDays:  ltmDecayHalfLifeDays,
+		LTMDecayMinScore:      ltmDecayMinScore,
+		JudgeModel:            getEnv("JUDGE_MODEL", "gpt-4o-mini"),
+		ExtractTagsModel:      getEnv("EXTRACT_TAGS_MODEL", "gpt-4o"),
 	}, nil
 }
 

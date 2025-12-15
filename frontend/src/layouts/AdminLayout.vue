@@ -18,9 +18,12 @@ const logout = () => {
             AI Memory
         </div>
         <nav class="sidebar-nav">
-            <router-link to="/admin/memory" class="nav-item">Memory Explorer</router-link>
-            <router-link to="/admin/users" class="nav-item">User Management</router-link>
-            <router-link to="/admin/status" class="nav-item">System Status</router-link>
+            <router-link to="/admin/memory" class="nav-item">📚 Memory Explorer</router-link>
+            <router-link to="/admin/staging" class="nav-item">🔍 Staging Review</router-link>
+            <router-link to="/admin/monitoring" class="nav-item">📊 Monitoring</router-link>
+            <router-link to="/admin/control" class="nav-item">🎛️ Control Panel</router-link>
+            <router-link to="/admin/users" class="nav-item">👥 User Management</router-link>
+            <router-link to="/admin/status" class="nav-item">⚡ System Status</router-link>
         </nav>
         <div class="sidebar-footer">
             <div class="user-info">Logged in as {{ user.username }}</div>

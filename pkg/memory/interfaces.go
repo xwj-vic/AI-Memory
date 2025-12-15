@@ -3,7 +3,6 @@ package memory
 import (
 	"ai-memory/pkg/types"
 	"context"
-	"time"
 )
 
 // Memory is the high-level interface for interacting with the agent's memory.
@@ -71,22 +70,11 @@ type ListStore interface {
 	Get(ctx context.Context, id string) (*types.Record, error)
 }
 
-// EndUser represents a user interacting with the AI.
-type EndUser struct {
-	ID             int       `json:"id"`
-	UserIdentifier string    `json:"user_identifier"`
-	LastActive     time.Time `json:"last_active"`
-	CreatedAt      time.Time `json:"created_at"`
-	// Stats (not in DB)
-	SessionCount int `json:"session_count"`
-	LTMCount     int `json:"ltm_count"`
-}
-
 // EndUserStore manages end users in persistent storage (MySQL).
 type EndUserStore interface {
 	Init() error
 	UpsertUser(ctx context.Context, identifier string) error
-	ListUsers(ctx context.Context) ([]EndUser, error)
+	ListUsers(ctx context.Context) ([]types.EndUser, error)
 }
 
 // Embedder abstracts the text embedding model provider.

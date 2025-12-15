@@ -4,11 +4,13 @@ import (
 	"ai-memory/pkg/config"
 	"ai-memory/pkg/llm"
 	"ai-memory/pkg/prompts"
+	"ai-memory/pkg/store"
 	"ai-memory/pkg/types"
 	"context"
 	"encoding/json"
 	"fmt"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -23,18 +25,45 @@ type Manager struct {
 	endUserStore EndUserStore
 	embedder     Embedder
 	llm          llm.LLM
+
+	// 漏斗型记忆组件
+	judge           *Judge
+	stagingStore    *store.StagingStore
+	decayCalculator *DecayCalculator
+
+	// 后台任务控制
+	ctx    context.Context
+	cancel context.CancelFunc
+	wg     sync.WaitGroup
 }
 
-func NewManager(cfg *config.Config, vStore VectorStore, lStore ListStore, uStore EndUserStore, embedder Embedder, llmModel llm.LLM) *Manager {
-	return &Manager{
-		cfg:          cfg,
-		prompts:      prompts.NewRegistry(cfg.SummarizePrompt, cfg.ExtractProfilePrompt),
-		vectorStore:  vStore,
-		stmStore:     lStore,
-		endUserStore: uStore,
-		embedder:     embedder,
-		llm:          llmModel,
+func NewManager(cfg *config.Config, vStore VectorStore, lStore ListStore, uStore EndUserStore, embedder Embedder, llmModel llm.LLM, redisStore *store.RedisStore) *Manager {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// 初始化漏斗组件
+	judge := NewJudge(llmModel, cfg.JudgeModel, cfg.ExtractTagsModel)
+	stagingStore := store.NewStagingStore(redisStore.GetClient(), 30) // TTL 30天
+	decayCalc := NewDecayCalculator(cfg.LTMDecayHalfLifeDays, cfg.LTMDecayMinScore)
+
+	m := &Manager{
+		cfg:             cfg,
+		prompts:         prompts.NewRegistry(cfg.SummarizePrompt, cfg.ExtractProfilePrompt),
+		vectorStore:     vStore,
+		stmStore:        lStore,
+		endUserStore:    uStore,
+		embedder:        embedder,
+		llm:             llmModel,
+		judge:           judge,
+		stagingStore:    stagingStore,
+		decayCalculator: decayCalc,
+		ctx:             ctx,
+		cancel:          cancel,
 	}
+
+	// 启动后台协程
+	m.startBackgroundTasks()
+
+	return m
 }
 
 type Filter struct {
@@ -130,6 +159,26 @@ func (m *Manager) Retrieve(ctx context.Context, userID string, sessionID string,
 }
 
 // Summarize consolidates STM into LTM.
+//
+// ⚠️ 【已废弃】此方法为传统的手动汇总方案，已被漏斗型记忆系统取代
+//
+// 传统方案流程：
+//
+//	STM → 手动触发Summary → LLM生成摘要 → 直接写入LTM → 清空STM
+//
+// 新方案（漏斗型）推荐使用：
+//
+//	STM → 自动LLM判定 → Staging暂存 → 频次验证 → 人工审核 → LTM（带标签） → 衰减遗忘
+//	参见：JudgeAndStageFromSTM() 和 PromoteStagingToLTM()
+//
+// 保留此方法的原因：
+//  1. 向后兼容：现有调用代码仍可工作
+//  2. 快速汇总：某些场景下需要立即汇总（不经过漏斗）
+//  3. 手动控制：管理员可手动触发特定会话的汇总
+//
+// 建议：新项目请使用漏斗型方案，此方法仅用于兼容和特殊场景
+//
+// Deprecated: 推荐使用 JudgeAndStageFromSTM + PromoteStagingToLTM 实现自动化记忆管理
 func (m *Manager) Summarize(ctx context.Context, userID string, sessionID string) error {
 	key := fmt.Sprintf("memory:stm:%s:%s", userID, sessionID)
 
@@ -386,8 +435,8 @@ func (m *Manager) Clear(ctx context.Context, userID string, sessionID string) er
 	return nil
 }
 
-// GetUsers returns list of end users with stats.
-func (m *Manager) GetUsers(ctx context.Context) ([]EndUser, error) {
+// GetUsers returns list of end users с stats.
+func (m *Manager) GetUsers(ctx context.Context) ([]types.EndUser, error) {
 	if m.endUserStore == nil {
 		return nil, fmt.Errorf("end user store not initialized")
 	}

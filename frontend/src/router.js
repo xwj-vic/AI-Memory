@@ -4,6 +4,9 @@ import AdminLayout from './layouts/AdminLayout.vue'
 import MemoryExplorer from './views/MemoryExplorer.vue'
 import Users from './views/Users.vue'
 import Status from './views/Status.vue'
+import StagingReview from './views/StagingReview.vue'
+import MonitoringDashboard from './views/MonitoringDashboard.vue'
+import AdminControl from './views/AdminControl.vue'
 
 const routes = [
     { path: '/login', component: Login, meta: { title: 'AI Memory Admin Login' } },
@@ -13,6 +16,9 @@ const routes = [
         meta: { requiresAuth: true },
         children: [
             { path: 'memory', component: MemoryExplorer },
+            { path: 'staging', component: StagingReview },
+            { path: 'monitoring', component: MonitoringDashboard },
+            { path: 'control', component: AdminControl },
             { path: 'users', component: Users },
             { path: 'status', component: Status },
             { path: '', redirect: 'memory' }

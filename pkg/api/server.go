@@ -41,6 +41,21 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/users", s.handleGetUsers)
 	s.mux.HandleFunc("GET /api/status", s.handleGetStatus)
 
+	// Staging审核API
+	s.mux.HandleFunc("GET /api/staging", s.handleGetStagingEntries)
+	s.mux.HandleFunc("POST /api/staging/{id}/confirm", s.handleConfirmStaging)
+	s.mux.HandleFunc("POST /api/staging/{id}/reject", s.handleRejectStaging)
+	s.mux.HandleFunc("GET /api/staging/stats", s.handleGetStagingStats)
+
+	// 监控指标API
+	s.mux.HandleFunc("GET /api/metrics", s.handleGetMetrics)
+	s.mux.HandleFunc("GET /api/dashboard/metrics", s.handleGetDashboardMetrics)
+
+	// 管理触发器API（手动触发漏斗流程）
+	s.mux.HandleFunc("POST /api/admin/trigger-judge", s.handleTriggerJudge)
+	s.mux.HandleFunc("POST /api/admin/trigger-promotion", s.handleTriggerPromotion)
+	s.mux.HandleFunc("POST /api/admin/trigger-decay", s.handleTriggerDecay)
+
 	// Static Files (Frontend) - Must be last to avoid catching API routes if not specific
 	fs := http.FileServer(http.Dir("./frontend/dist"))
 	s.mux.Handle("/", fs)

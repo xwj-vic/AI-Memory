@@ -114,11 +114,11 @@ func main() {
 		endUserStore = eus
 	}
 
-	manager := memory.NewManager(cfg, vectorStore, redisStore, endUserStore, embedderClient, llmClient)
+	memoryManager := memory.NewManager(cfg, vectorStore, redisStore, endUserStore, embedderClient, llmClient, redisStore)
 
 	// 4. Start Admin API
 	if authService != nil {
-		apiServer := api.NewServer(authService, manager)
+		apiServer := api.NewServer(authService, memoryManager)
 		go func() {
 			if err := apiServer.Start(":8080"); err != nil {
 				log.Printf("API Server failed: %v", err)

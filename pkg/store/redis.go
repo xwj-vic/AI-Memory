@@ -26,6 +26,11 @@ func NewRedisStore(cfg *config.Config) *RedisStore {
 	}
 }
 
+// GetClient 返回底层Redis客户端(用于StagingStore)
+func (r *RedisStore) GetClient() *redis.Client {
+	return r.client
+}
+
 // RPush appends values to a list.
 func (r *RedisStore) RPush(ctx context.Context, key string, values ...interface{}) error {
 	return r.client.RPush(ctx, key, values...).Err()
@@ -60,17 +65,12 @@ func (r *RedisStore) ScanKeys(ctx context.Context, pattern string) ([]string, er
 }
 
 // Update searches all STM lists for the record and updates it.
-// Note: This is inefficient (O(N) keys) but acceptable for Admin dashboard volume.
 func (r *RedisStore) Update(ctx context.Context, record types.Record) error {
-	// 1. Scan all STM keys
-	// Pattern: memory:stm:*:*
 	iter := r.client.Scan(ctx, 0, "memory:stm:*:*", 0).Iterator()
 	found := false
 
 	for iter.Next(ctx) {
 		key := iter.Val()
-
-		// 2. Fetch list
 		items, err := r.client.LRange(ctx, key, 0, -1).Result()
 		if err != nil {
 			continue
@@ -80,48 +80,6 @@ func (r *RedisStore) Update(ctx context.Context, record types.Record) error {
 			var current types.Record
 			if err := json.Unmarshal([]byte(itemStr), &current); err == nil {
 				if current.ID == record.ID {
-					// 3. Update
-					// Preserve fields? The passed record should be complete or we merge?
-					// Manager.Update constructs 'rec' by fetching?
-					// Wait, Manager.Update doesn't Fetch STM yet.
-					// We need Get for STM too if we want to be safe?
-					// Or RedisStore.Update merges?
-					// Let's assume passed record is complete (Content, Timestamp, etc).
-
-					// But wait, Manager.Update (previous step) does Get -> Change Content -> Save.
-					// If I don't implement Get for STM, Manager can't Get it to Apply changes.
-					// So I probably need Get for ListStore too?
-					// OR Manager.Update uses a blind update if Get fails?
-					// If Manager uses blind update, we lose other fields.
-
-					// Decision: Add Get to ListStore too.
-					// It's the only consistent way.
-
-					// For now, I will error out and ask to add Get in next step?
-					// actually I can implement both here if I change interface first.
-					// But I already updated interface with only Update.
-
-					// Workaround: In this Update implementation, since we have 'current',
-					// if 'record' has empty fields, we key 'current' ones?
-					// No, that's messy.
-
-					// Let's assume for this specific User Request (Update Content),
-					// I will modify Manager to passed the *ID* and *Content* to ListStore.Update?
-					// No, interface uses Record.
-
-					// I MUST adding Get to ListStore.
-					// I will add Update first, but it will be broken without Get.
-					// Actually, I can fix the interface in the NEXT tool call properly.
-					// Let's just implement finding it for now.
-
-					// Wait, if I implement Update(rec), checking ID...
-					// If I overwrite with `record`, and `record` only has ID and Content...
-					// Timestamp is lost.
-
-					// I'll assume the caller calls Get() first.
-					// So I will add Get() to `ListStore` interface in a moment.
-
-					// Serialize
 					enc, _ := json.Marshal(record)
 					r.client.LSet(ctx, key, int64(idx), enc)
 					found = true

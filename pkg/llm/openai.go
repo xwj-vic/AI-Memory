@@ -2,9 +2,11 @@ package llm
 
 import (
 	"ai-memory/pkg/config"
+	"ai-memory/pkg/logger"
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/sashabaranov/go-openai"
 )
@@ -35,6 +37,7 @@ func NewOpenAIClient(cfg *config.Config) *OpenAIClient {
 
 // GenerateText via OpenAI Chat Completion
 func (c *OpenAIClient) GenerateText(ctx context.Context, prompt string) (string, error) {
+	start := time.Now()
 	resp, err := c.client.CreateChatCompletion(
 		ctx,
 		openai.ChatCompletionRequest{
@@ -47,6 +50,9 @@ func (c *OpenAIClient) GenerateText(ctx context.Context, prompt string) (string,
 			},
 		},
 	)
+
+	duration := time.Since(start)
+	logger.LLM(ctx, c.model, "chat_completion", duration, err)
 
 	if err != nil {
 		return "", err
@@ -61,6 +67,7 @@ func (c *OpenAIClient) GenerateText(ctx context.Context, prompt string) (string,
 
 // EmbedQuery generates embedding for a single string
 func (c *OpenAIClient) EmbedQuery(ctx context.Context, text string) ([]float32, error) {
+	start := time.Now()
 	// Normalize newlines as per OpenAI recommendation for some models, though less critical for ada-002
 	text = strings.ReplaceAll(text, "\n", " ")
 
@@ -71,6 +78,9 @@ func (c *OpenAIClient) EmbedQuery(ctx context.Context, text string) ([]float32, 
 			Model: openai.EmbeddingModel(c.embeddingModel),
 		},
 	)
+
+	duration := time.Since(start)
+	logger.LLM(ctx, c.embeddingModel, "embedding_query", duration, err)
 
 	if err != nil {
 		return nil, err

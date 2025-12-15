@@ -2,7 +2,7 @@ package store
 
 import (
 	"ai-memory/pkg/config"
-	"ai-memory/pkg/memory"
+	"ai-memory/pkg/types"
 	"context"
 	"database/sql"
 	"fmt"
@@ -70,7 +70,7 @@ func (s *MySQLEndUserStore) UpsertUser(ctx context.Context, identifier string) e
 	return err
 }
 
-func (s *MySQLEndUserStore) ListUsers(ctx context.Context) ([]memory.EndUser, error) {
+func (s *MySQLEndUserStore) ListUsers(ctx context.Context) ([]types.EndUser, error) {
 	query := `SELECT id, user_identifier, last_active, created_at FROM end_users ORDER BY last_active DESC`
 	rows, err := s.db.QueryContext(ctx, query)
 	if err != nil {
@@ -78,9 +78,9 @@ func (s *MySQLEndUserStore) ListUsers(ctx context.Context) ([]memory.EndUser, er
 	}
 	defer rows.Close()
 
-	var users []memory.EndUser
+	var users []types.EndUser
 	for rows.Next() {
-		var u memory.EndUser
+		var u types.EndUser
 		if err := rows.Scan(&u.ID, &u.UserIdentifier, &u.LastActive, &u.CreatedAt); err != nil {
 			return nil, err
 		}
