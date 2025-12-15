@@ -1,0 +1,58 @@
+time="2025-12-15 23:00:09" level=INFO msg="[SYSTEM] Connected to Redis (STM)"
+time="2025-12-15 23:00:09" level=INFO msg="[SYSTEM] Connected to MySQL"
+time="2025-12-15 23:00:09" level=INFO msg="[SYSTEM] Auth Schema Initialized"
+time="2025-12-15 23:00:09" level=INFO msg="[SYSTEM] Initializing Qdrant Vector Store" addr=localhost:6334 collection=ai_memory
+time="2025-12-15 23:00:09" level=INFO msg="[SYSTEM] Connected to Qdrant (LTM)"
+time="2025-12-15 23:00:09" level=INFO msg="[SYSTEM] ✅ 后台调度器已启动: STM清洗 + Staging晋升 + 记忆衰减"
+time="2025-12-15 23:00:09" level=INFO msg="[SYSTEM] Starting Staging Promotion Task" interval_hours=1
+time="2025-12-15 23:00:09" level=INFO msg="[SYSTEM] Starting STM Autosave Task" interval=10m0s
+time="2025-12-15 23:00:09" level=INFO msg="[SYSTEM] Admin API Server started (background)"
+time="2025-12-15 23:00:09" level=INFO msg="[SYSTEM] Server is running at http://localhost:8080"
+time="2025-12-15 23:00:09" level=INFO msg="[SYSTEM] Starting Admin API" addr=:8080
+time="2025-12-15 23:00:28" level=INFO msg="LLM Call Success" module=llm model=deepseek-ai/DeepSeek-V3.2 type=chat_completion latency=2.648587157s
+time="2025-12-15 23:00:29" level=INFO msg="LLM Call Success" module=llm model=BAAI/bge-m3 type=embedding_query latency=102.615368ms
+time="2025-12-15 23:00:33" level=INFO msg="LLM Call Success" module=llm model=deepseek-ai/DeepSeek-V3.2 type=chat_completion latency=4.149979041s
+time="2025-12-15 23:00:33" level=INFO msg="LLM Call Success" module=llm model=BAAI/bge-m3 type=embedding_query latency=116.053021ms
+time="2025-12-15 23:00:36" level=INFO msg="LLM Call Success" module=llm model=deepseek-ai/DeepSeek-V3.2 type=chat_completion latency=2.831633416s
+time="2025-12-15 23:00:36" level=INFO msg="LLM Call Success" module=llm model=BAAI/bge-m3 type=embedding_query latency=100.530162ms
+time="2025-12-15 23:04:14" level=INFO msg="[SYSTEM] Connected to Redis (STM)"
+time="2025-12-15 23:04:14" level=INFO msg="[SYSTEM] Connected to MySQL"
+time="2025-12-15 23:04:14" level=INFO msg="[SYSTEM] Auth Schema Initialized"
+time="2025-12-15 23:04:14" level=INFO msg="[SYSTEM] Initializing Qdrant Vector Store" addr=localhost:6334 collection=ai_memory
+time="2025-12-15 23:04:14" level=INFO msg="[SYSTEM] Connected to Qdrant (LTM)"
+time="2025-12-15 23:04:14" level=INFO msg="[SYSTEM] ✅ 后台调度器已启动: STM清洗 + Staging晋升 + 记忆衰减"
+time="2025-12-15 23:04:14" level=INFO msg="[SYSTEM] Starting Staging Promotion Task" interval_hours=1
+time="2025-12-15 23:04:14" level=INFO msg="[SYSTEM] Starting STM Autosave Task" interval=10m0s
+time="2025-12-15 23:04:14" level=INFO msg="[SYSTEM] Admin API Server started (background)"
+time="2025-12-15 23:04:14" level=INFO msg="[SYSTEM] Server is running at http://localhost:8080"
+time="2025-12-15 23:04:14" level=INFO msg="[SYSTEM] Starting Admin API" addr=:8080
+time="2025-12-15 23:05:27" level=INFO msg="LLM Call Success" module=llm model=deepseek-ai/DeepSeek-V3.2 type=chat_completion latency=5.296416768s
+time="2025-12-15 23:05:54" level=INFO msg="LLM Call Success" module=llm model=BAAI/bge-m3 type=embedding_query latency=132.876319ms
+time="2025-12-15 23:08:53" level=INFO msg="[SYSTEM] Connected to Redis (STM)"
+time="2025-12-15 23:08:53" level=INFO msg="[SYSTEM] Connected to MySQL"
+time="2025-12-15 23:08:53" level=INFO msg="[SYSTEM] Auth Schema Initialized"
+time="2025-12-15 23:08:54" level=INFO msg="[SYSTEM] Initializing Qdrant Vector Store" addr=localhost:6334 collection=ai_memory
+time="2025-12-15 23:08:54" level=INFO msg="[SYSTEM] Connected to Qdrant (LTM)"
+time="2025-12-15 23:08:54" level=INFO msg="[SYSTEM] ✅ 后台调度器已启动: STM清洗 + Staging晋升 + 记忆衰减"
+time="2025-12-15 23:08:54" level=INFO msg="[SYSTEM] Starting Staging Promotion Task" interval_hours=1
+time="2025-12-15 23:08:54" level=INFO msg="[SYSTEM] Starting STM Autosave Task" interval=10m0s
+time="2025-12-15 23:08:54" level=INFO msg="[SYSTEM] Admin API Server started (background)"
+time="2025-12-15 23:08:54" level=INFO msg="[SYSTEM] Server is running at http://localhost:8080"
+time="2025-12-15 23:08:54" level=INFO msg="[SYSTEM] Starting Admin API" addr=:8080
+time="2025-12-15 23:09:31" level=INFO msg="LLM Call Success" module=llm model=deepseek-ai/DeepSeek-V3.2 type=chat_completion latency=4.966505762s
+time="2025-12-15 23:09:31" level=INFO msg="LLM Call Success" module=llm model=BAAI/bge-m3 type=embedding_query latency=103.818165ms
+time="2025-12-15 23:09:57" level=ERROR msg=自动晋升失败 error="写入LTM失败: Upsert() failed: ai_memory: rpc error: code = InvalidArgument desc = Unable to parse UUID: ltm_1765811371989115000"
+time="2025-12-15 23:13:13" level=INFO msg="[SYSTEM] Connected to Redis (STM)"
+time="2025-12-15 23:13:13" level=INFO msg="[SYSTEM] Connected to MySQL"
+time="2025-12-15 23:13:13" level=INFO msg="[SYSTEM] Auth Schema Initialized"
+time="2025-12-15 23:13:13" level=INFO msg="[SYSTEM] Initializing Qdrant Vector Store" addr=localhost:6334 collection=ai_memory
+time="2025-12-15 23:13:14" level=INFO msg="[SYSTEM] Connected to Qdrant (LTM)"
+time="2025-12-15 23:13:14" level=INFO msg="[SYSTEM] ✅ 后台调度器已启动: STM清洗 + Staging晋升 + 记忆衰减"
+time="2025-12-15 23:13:14" level=INFO msg="[SYSTEM] Starting Staging Promotion Task" interval_hours=1
+time="2025-12-15 23:13:14" level=INFO msg="[SYSTEM] Starting STM Autosave Task" interval=10m0s
+time="2025-12-15 23:13:14" level=INFO msg="[SYSTEM] Admin API Server started (background)"
+time="2025-12-15 23:13:14" level=INFO msg="[SYSTEM] Server is running at http://localhost:8080"
+time="2025-12-15 23:13:14" level=INFO msg="[SYSTEM] Starting Admin API" addr=:8080
+time="2025-12-15 23:13:31" level=INFO msg="LLM Call Success" module=llm model=deepseek-ai/DeepSeek-V3.2 type=chat_completion latency=3.893657473s
+time="2025-12-15 23:13:31" level=INFO msg="LLM Call Success" module=llm model=BAAI/bge-m3 type=embedding_query latency=104.096555ms
+time="2025-12-15 23:14:06" level=INFO msg="🧠 Memory Promotion" category=preference id=auto score=0.95 reason="User: 我很喜欢使用Go语言开发微服务\nAI: 明白了，Go语言确实非常适合微服务架构"

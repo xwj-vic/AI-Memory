@@ -2,10 +2,10 @@ package api
 
 import (
 	"ai-memory/pkg/auth"
+	"ai-memory/pkg/logger"
 	"ai-memory/pkg/memory"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 )
 
@@ -104,7 +104,7 @@ func (s *Server) Start(addr string) error {
 		Addr:    addr,
 		Handler: s.mux,
 	}
-	log.Printf("Starting Admin API on %s", addr)
+	logger.System("Starting Admin API", "addr", addr) // Changed from log.Printf
 	return server.ListenAndServe()
 }
 

@@ -1,11 +1,13 @@
 package memory
 
 import (
+	"ai-memory/pkg/logger"
 	"ai-memory/pkg/types"
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+
+	"github.com/google/uuid"
 )
 
 // BatchPromoteToLTM 批量晋升记忆到LTM（性能优化）
@@ -28,7 +30,7 @@ func (m *Manager) BatchPromoteToLTM(ctx context.Context, entries []*types.Stagin
 		// 生成Embedding
 		vector, err := m.embedder.EmbedQuery(ctx, entry.Content)
 		if err != nil {
-			log.Printf("生成embedding失败 [%s]: %v", entry.ID, err)
+			logger.Error("生成embedding失败", err, "entry_id", entry.ID)
 			continue
 		}
 
@@ -47,7 +49,7 @@ func (m *Manager) BatchPromoteToLTM(ctx context.Context, entries []*types.Stagin
 		}
 
 		ltmRecord := types.Record{
-			ID:        fmt.Sprintf("ltm_%d", entry.FirstSeenAt.UnixNano()),
+			ID:        uuid.New().String(),
 			Content:   entry.Content,
 			Embedding: vector,
 			Timestamp: entry.LastSeenAt,
@@ -69,11 +71,11 @@ func (m *Manager) BatchPromoteToLTM(ctx context.Context, entries []*types.Stagin
 	// 批量删除Staging
 	if len(successIDs) > 0 {
 		if err := m.stagingStore.DeleteBatch(ctx, successIDs); err != nil {
-			log.Printf("批量删除暂存区失败: %v", err)
+			logger.Error("批量删除暂存区失败", err)
 		}
 	}
 
-	log.Printf("✅ 批量晋升完成: %d条记忆", len(ltmRecords))
+	logger.System("Batch Promotion Completed", "count", len(ltmRecords))
 	return nil
 }
 
@@ -114,7 +116,7 @@ func (m *Manager) JudgeAndStageFromSTMCached(ctx context.Context, userID, sessio
 		if len(needsJudgment) > 0 {
 			results, err := m.judge.JudgeBatch(ctx, needsJudgment)
 			if err != nil {
-				log.Printf("批量判定失败: %v", err)
+				logger.Error("批量判定失败", err)
 				continue
 			}
 			cachedResults = append(cachedResults, results...)
@@ -124,7 +126,7 @@ func (m *Manager) JudgeAndStageFromSTMCached(ctx context.Context, userID, sessio
 		for i, result := range cachedResults {
 			if result.ShouldStage && result.ValueScore >= m.cfg.StagingValueThreshold {
 				if err := m.stagingStore.AddOrIncrement(ctx, userID, needsJudgment[i], result); err != nil {
-					log.Printf("添加到暂存区失败: %v", err)
+					logger.Error("添加到暂存区失败", err)
 				}
 			}
 		}

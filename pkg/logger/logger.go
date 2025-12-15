@@ -2,6 +2,7 @@ package logger
 
 import (
 	"context"
+	"io"
 	"log/slog"
 	"os"
 	"time"
@@ -10,6 +11,18 @@ import (
 var Log *slog.Logger
 
 func init() {
+	// 1. 打开日志文件
+	logFile, err := os.OpenFile("ai_memory.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		// 如果无法打开文件，仅回退到 Stdout，但打印错误
+		os.Stderr.WriteString("Failed to open log file: " + err.Error() + "\n")
+	}
+
+	var writer io.Writer = os.Stdout
+	if logFile != nil {
+		writer = io.MultiWriter(os.Stdout, logFile)
+	}
+
 	opts := &slog.HandlerOptions{
 		Level: slog.LevelInfo,
 		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
@@ -22,7 +35,7 @@ func init() {
 	}
 	// 使用 JSON Handler 以便机器解析，或者 Text Handler 用于开发调试
 	// 为了美观，这里暂时用 TextHandler，生产环境建议 JSON
-	handler := slog.NewTextHandler(os.Stdout, opts)
+	handler := slog.NewTextHandler(writer, opts)
 	Log = slog.New(handler)
 }
 
@@ -67,8 +80,12 @@ func MemoryCheck(action string, count int, details string) {
 }
 
 // Error 简单包装
-func Error(msg string, err error) {
-	Log.Error(msg, slog.String("error", err.Error()))
+func Error(msg string, err error, args ...any) {
+	// 将 error 加入 args
+	if err != nil {
+		args = append(args, slog.String("error", err.Error()))
+	}
+	Log.Error(msg, args...)
 }
 
 // Info 简单包装

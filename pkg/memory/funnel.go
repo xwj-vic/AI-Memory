@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // ========== 漏斗流程核心方法 ==========
@@ -141,11 +143,11 @@ func (m *Manager) promoteSingleEntry(ctx context.Context, entry *types.StagingEn
 	}
 
 	ltmRecord := types.Record{
-		ID:        fmt.Sprintf("ltm_%d", time.Now().UnixNano()),
+		ID:        uuid.New().String(),
 		Content:   entry.Content,
 		Embedding: vector,
-		Timestamp: now,
-		Metadata:  metadataMap,
+		Timestamp: entry.LastSeenAt,
+		Metadata:  metadataMap, // Keep metadataMap for compatibility with types.Record.Metadata
 		Type:      types.LongTerm,
 	}
 
@@ -270,7 +272,51 @@ func (m *Manager) startBackgroundTasks() {
 		}
 	}()
 
-	// 任务2：定期执行遗忘机制
+	// 任务2：STM -> Staging 自动清洗 (新增)
+	m.wg.Add(1)
+	go func() {
+		defer m.wg.Done()
+		// 每 10 分钟自动检查一次 STM
+		interval := 10 * time.Minute
+		logger.System("Starting STM Autosave Task", "interval", interval)
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				// 方案：遍历所有 stm Key
+				keys, err := m.stmStore.ScanKeys(m.ctx, "memory:stm:*:*")
+				if err != nil {
+					logger.Error("STM Scanner Failed", err)
+					continue
+				}
+
+				processedUsers := make(map[string]bool)
+				for _, key := range keys {
+					// key format: memory:stm:<userID>:<sessionID>
+					var userID, sessionID string
+					if n, _ := fmt.Sscanf(key, "memory:stm:%s:%s", &userID, &sessionID); n == 2 {
+						// 避免同一个用户重复频繁调用 (可选优化)
+						if processedUsers[userID] {
+							continue
+						}
+
+						if err := m.JudgeAndStageFromSTM(m.ctx, userID, sessionID); err != nil {
+							logger.Error("Auto Judge Failed", err)
+						} else {
+							processedUsers[userID] = true
+						}
+					}
+				}
+
+			case <-m.ctx.Done():
+				return
+			}
+		}
+	}()
+
+	// 任务3：定期执行遗忘机制
 	m.wg.Add(1)
 	go func() {
 		defer m.wg.Done()
@@ -289,7 +335,7 @@ func (m *Manager) startBackgroundTasks() {
 		}
 	}()
 
-	logger.System("✅ 后台调度器已启动: Staging晋升 + 记忆衰减")
+	logger.System("✅ 后台调度器已启动: STM清洗 + Staging晋升 + 记忆衰减")
 }
 
 // Shutdown 优雅关闭

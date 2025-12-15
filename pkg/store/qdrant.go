@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"reflect"
 	"strconv"
 	"time"
 
@@ -67,6 +68,58 @@ func (s *QdrantStore) Init(ctx context.Context, vectorSize int) error {
 	return nil
 }
 
+// toPayloadMap sanitizes the map for Qdrant payload (recursive)
+// Converts time.Time to string (RFC3339) and ensures maps are map[string]interface{}
+func toPayloadValue(v interface{}) interface{} {
+	if v == nil {
+		return nil
+	}
+
+	val := reflect.ValueOf(v)
+	switch val.Kind() {
+	case reflect.Struct:
+		if t, ok := v.(time.Time); ok {
+			return t.Format(time.RFC3339)
+		}
+		// Try to convert struct to map if possible, or just stringify?
+		// for now letting it fall through or custom logic can be added.
+		return fmt.Sprintf("%v", v)
+
+	case reflect.Map:
+		// Convert any map to map[string]interface{}
+		newMap := make(map[string]interface{})
+		iter := val.MapRange()
+		for iter.Next() {
+			k := iter.Key()
+			v := iter.Value()
+			// Key must be string
+			newMap[fmt.Sprintf("%v", k.Interface())] = toPayloadValue(v.Interface())
+		}
+		return newMap
+
+	case reflect.Slice, reflect.Array:
+		// Convert any slice/array to []interface{}
+		l := val.Len()
+		newSlice := make([]interface{}, l)
+		for i := 0; i < l; i++ {
+			newSlice[i] = toPayloadValue(val.Index(i).Interface())
+		}
+		return newSlice
+
+	default:
+		// Basic types (int, string, bool, float) should be fine
+		return v
+	}
+}
+
+func toPayloadMap(m map[string]interface{}) map[string]interface{} {
+	clean := make(map[string]interface{})
+	for k, v := range m {
+		clean[k] = toPayloadValue(v)
+	}
+	return clean
+}
+
 func (s *QdrantStore) Add(ctx context.Context, records []types.Record) error {
 	var points []*qdrant.PointStruct
 	for _, r := range records {
@@ -74,20 +127,21 @@ func (s *QdrantStore) Add(ctx context.Context, records []types.Record) error {
 			continue
 		}
 
-		// Convert []float32 to []float32 (already same)
 		// Payload map
 		payload := map[string]interface{}{
 			"content":   r.Content,
 			"timestamp": r.Timestamp.Format(time.RFC3339),
 			"type":      string(r.Type),
 			"metadata":  r.Metadata,
-			// Flatten metadata into top level if needed, or keep as map? Qdrant handles JSON payload.
 		}
+
+		// Sanitize payload
+		cleanPayload := toPayloadMap(payload)
 
 		points = append(points, &qdrant.PointStruct{
 			Id:      qdrant.NewIDUUID(r.ID),
 			Vectors: qdrant.NewVectors(r.Embedding...),
-			Payload: qdrant.NewValueMap(payload),
+			Payload: qdrant.NewValueMap(cleanPayload),
 		})
 	}
 
@@ -436,4 +490,14 @@ func (s *QdrantStore) Count(ctx context.Context, filters map[string]interface{})
 		return 0, err
 	}
 	return int64(countResult.Result.Count), nil
+}
+
+// GetCollectionInfo retrieves collection statistics
+func (s *QdrantStore) GetCollectionInfo(ctx context.Context, collectionName string) (*qdrant.CollectionInfo, error) {
+	return s.client.GetCollectionInfo(ctx, collectionName)
+}
+
+// DeleteCollection drops the collection
+func (s *QdrantStore) DeleteCollection(ctx context.Context, collectionName string) error {
+	return s.client.DeleteCollection(ctx, collectionName)
 }

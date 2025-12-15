@@ -3,6 +3,7 @@ package memory
 import (
 	"ai-memory/pkg/config"
 	"ai-memory/pkg/llm"
+	"ai-memory/pkg/logger"
 	"ai-memory/pkg/prompts"
 	"ai-memory/pkg/store"
 	"ai-memory/pkg/types"
@@ -222,7 +223,7 @@ func (m *Manager) Summarize(ctx context.Context, userID string, sessionID string
 				Type:      types.LongTerm,
 			}
 			_ = m.vectorStore.Add(ctx, []types.Record{attrRecord})
-			fmt.Printf("Identified and stored user attributes for %s.\n", userID)
+			logger.Info("Identified and stored user attributes", "user_id", userID)
 		}
 	}
 
@@ -251,7 +252,7 @@ func (m *Manager) Summarize(ctx context.Context, userID string, sessionID string
 		return fmt.Errorf("failed to clear STM: %w", err)
 	}
 
-	fmt.Printf("Summarized %d items into LTM for %s (Session %s).\n", len(stmData), userID, sessionID)
+	logger.System("Summarized items into LTM", "count", len(stmData), "user_id", userID, "session_id", sessionID)
 	return nil
 }
 
@@ -431,7 +432,7 @@ func (m *Manager) Clear(ctx context.Context, userID string, sessionID string) er
 	if err := m.stmStore.Del(ctx, key); err != nil {
 		return err
 	}
-	fmt.Printf("STM cleared for user %s session %s.\n", userID, sessionID)
+	logger.System("STM cleared", "user_id", userID, "session_id", sessionID)
 	return nil
 }
 

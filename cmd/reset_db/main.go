@@ -3,35 +3,35 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
+	"os"
 
 	"ai-memory/pkg/config"
-
-	"github.com/qdrant/go-client/qdrant"
+	"ai-memory/pkg/logger"
+	"ai-memory/pkg/store"
 )
 
 func main() {
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("Load config failed: %v", err)
+		logger.Error("Load config failed", err)
+		os.Exit(1)
 	}
 	ctx := context.Background()
 
-	client, err := qdrant.NewClient(&qdrant.Config{
-		Host: "localhost",
-		Port: 6334,
-	})
+	// 初始化 Qdrant Store
+	// client, err := qdrant.NewClient(...) // We use store package
+	qs, err := store.NewQdrantStore(cfg)
 	if err != nil {
-		log.Fatalf("Qdrant connect failed: %v", err)
+		logger.Error("Qdrant connect failed", err)
+		os.Exit(1)
 	}
 
 	coll := cfg.QdrantCollection
-	fmt.Printf("Deleting collection '%s'...\n", coll)
+	logger.Info("Deleting collection", "collection", coll)
 
-	err = client.DeleteCollection(ctx, coll)
+	err = qs.DeleteCollection(ctx, coll)
 	if err != nil {
-		// Log but continue - it might not exist
-		fmt.Printf("Delete warning (might not exist): %v\n", err)
+		logger.Info("Delete warning (might not exist)", "error", err)
 	} else {
 		fmt.Println("Collection deleted successfully.")
 	}

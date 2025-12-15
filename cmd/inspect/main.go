@@ -2,48 +2,51 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"log"
+	"os"
 
 	"ai-memory/pkg/config"
+	"ai-memory/pkg/logger"
 	"ai-memory/pkg/store"
-
-	"github.com/qdrant/go-client/qdrant"
 )
 
 func main() {
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("Load config failed: %v", err)
+		logger.Error("Load config failed", err)
+		os.Exit(1)
 	}
 	ctx := context.Background()
 
-	// 1. Inspect Redis
+	// 1. Check Redis
 	redisStore := store.NewRedisStore(cfg)
 	if err := redisStore.Ping(ctx); err == nil {
-		items, _ := redisStore.LRange(ctx, "memory:stm:chat_history", 0, -1)
-		fmt.Printf("Redis (STM): %d items found.\n", len(items))
+		// Count items?
+		// pattern: memory:stm:*:*
+		keys, _ := redisStore.ScanKeys(ctx, "memory:stm:*:*")
+		items := 0
+		for _, key := range keys {
+			l, _ := redisStore.LRange(ctx, key, 0, -1)
+			items += len(l)
+		}
+		logger.System("Redis (STM) Status", "items", items)
 	} else {
-		fmt.Printf("Redis (STM): Connection failed.\n")
+		logger.Error("Redis (STM) Connection failed", err)
 	}
 
-	// 2. Inspect Qdrant
-	// We use raw client to get collection info
-	client, err := qdrant.NewClient(&qdrant.Config{
-		Host: "localhost",
-		Port: 6334,
-	})
+	// 2. Check Qdrant
+	qs, err := store.NewQdrantStore(cfg)
 	if err != nil {
-		log.Fatalf("Qdrant connect failed: %v", err)
+		logger.Error("Qdrant connect failed", err)
+		os.Exit(1)
 	}
-
 	coll := cfg.QdrantCollection
-	info, err := client.GetCollectionInfo(ctx, coll)
+	info, err := qs.GetCollectionInfo(context.Background(), coll)
 	if err != nil {
-		fmt.Printf("Qdrant (LTM): Failed to get info for '%s': %v\n", coll, err)
+		logger.Error("Qdrant (LTM) Failed to get info", err, "collection", coll)
 	} else {
-		fmt.Printf("Qdrant (LTM) Collection '%s':\n", coll)
-		fmt.Printf(" - Status: %v\n", info.Status)
-		fmt.Printf(" - Points Count: %d\n", info.PointsCount)
+		logger.System("Qdrant (LTM) Collection Info",
+			"collection", coll,
+			"status", info.Status,
+			"points_count", info.PointsCount)
 	}
 }
