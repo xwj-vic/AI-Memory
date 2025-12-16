@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -34,6 +35,21 @@ func (r *RedisStore) GetClient() *redis.Client {
 // RPush appends values to a list.
 func (r *RedisStore) RPush(ctx context.Context, key string, values ...interface{}) error {
 	return r.client.RPush(ctx, key, values...).Err()
+}
+
+// RPushWithExpire appends values to a list and sets expiration.
+func (r *RedisStore) RPushWithExpire(ctx context.Context, key string, expirationDays int, values ...interface{}) error {
+	// 如果expirationDays为0，则不设置过期时间
+	if expirationDays <= 0 {
+		return r.RPush(ctx, key, values...)
+	}
+
+	// 使用Pipeline确保原子性
+	pipe := r.client.Pipeline()
+	pipe.RPush(ctx, key, values...)
+	pipe.Expire(ctx, key, time.Duration(expirationDays)*24*time.Hour)
+	_, err := pipe.Exec(ctx)
+	return err
 }
 
 // LRange retrieves a range of elements from a list.
@@ -117,4 +133,19 @@ func (r *RedisStore) Get(ctx context.Context, id string) (*types.Record, error) 
 		}
 	}
 	return nil, fmt.Errorf("record not found")
+}
+
+// SIsMember checks if a member exists in a set.
+func (r *RedisStore) SIsMember(ctx context.Context, key string, member interface{}) (bool, error) {
+	return r.client.SIsMember(ctx, key, member).Result()
+}
+
+// SAdd adds members to a set.
+func (r *RedisStore) SAdd(ctx context.Context, key string, members ...interface{}) error {
+	return r.client.SAdd(ctx, key, members...).Err()
+}
+
+// Expire sets a timeout on a key.
+func (r *RedisStore) Expire(ctx context.Context, key string, expiration time.Duration) error {
+	return r.client.Expire(ctx, key, expiration).Err()
 }

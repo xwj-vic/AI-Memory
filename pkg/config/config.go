@@ -41,6 +41,7 @@ type Config struct {
 	// STM配置
 	STMWindowSize       int // STM滑动窗口大小
 	STMMaxRetentionDays int // STM最大保留天数
+	STMExpirationDays   int // STM过期天数（0表示不过期）
 	STMBatchJudgeSize   int // 批量判定大小
 
 	// Staging配置
@@ -70,6 +71,7 @@ func Load() (*Config, error) {
 	// 漏斗型配置
 	stmWindowSize, _ := strconv.Atoi(getEnv("STM_WINDOW_SIZE", "100"))
 	stmMaxRetentionDays, _ := strconv.Atoi(getEnv("STM_MAX_RETENTION_DAYS", "7"))
+	stmExpirationDays, _ := strconv.Atoi(getEnv("STM_EXPIRATION_DAYS", "7"))
 	stmBatchJudgeSize, _ := strconv.Atoi(getEnv("STM_BATCH_JUDGE_SIZE", "10"))
 
 	stagingMinOccurrences, _ := strconv.Atoi(getEnv("STAGING_MIN_OCCURRENCES", "2"))
@@ -106,6 +108,7 @@ func Load() (*Config, error) {
 		// 漏斗型配置
 		STMWindowSize:         stmWindowSize,
 		STMMaxRetentionDays:   stmMaxRetentionDays,
+		STMExpirationDays:     stmExpirationDays,
 		STMBatchJudgeSize:     stmBatchJudgeSize,
 		StagingMinOccurrences: stagingMinOccurrences,
 		StagingMinWaitHours:   stagingMinWaitHours,

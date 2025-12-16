@@ -13,10 +13,11 @@ import (
 
 // ========== 漏斗流程核心方法 ==========
 
-// JudgeAndStageFromSTM 从STM判定并添加到Staging
+// JudgeAndStageFromSTM 从 STM判定并添加到Staging
 // 这个方法在Add()后可以调用，批量处理STM中的新记忆
 func (m *Manager) JudgeAndStageFromSTM(ctx context.Context, userID, sessionID string) error {
 	key := fmt.Sprintf("memory:stm:%s:%s", userID, sessionID)
+	judgedSetKey := fmt.Sprintf("memory:judged:%s:%s", userID, sessionID)
 
 	// 获取STM数据
 	stmData, err := m.stmStore.LRange(ctx, key, 0, -1)
@@ -28,21 +29,43 @@ func (m *Manager) JudgeAndStageFromSTM(ctx context.Context, userID, sessionID st
 		return nil
 	}
 
-	// 批量判定（每批最多10条）
-	batchSize := m.cfg.STMBatchJudgeSize
-	for i := 0; i < len(stmData); i += batchSize {
-		end := i + batchSize
-		if end > len(stmData) {
-			end = len(stmData)
+	// 解析记录并过滤已判定的
+	var toJudge []types.Record
+	var recordIDs []string
+	for _, data := range stmData {
+		var rec types.Record
+		if err := json.Unmarshal([]byte(data), &rec); err != nil {
+			continue
 		}
 
-		batch := stmData[i:end]
+		// 检查是否已判定
+		isJudged, _ := m.stmStore.SIsMember(ctx, judgedSetKey, rec.ID)
+		if isJudged {
+			continue // 跳过已判定记录
+		}
+
+		toJudge = append(toJudge, rec)
+		recordIDs = append(recordIDs, rec.ID)
+	}
+
+	if len(toJudge) == 0 {
+		return nil // 所有记录都已判定
+	}
+
+	logger.System("STM判定开始", "total", len(stmData), "new", len(toJudge), "user", userID, "session", sessionID)
+
+	// 批量判定（每批最多10条）
+	batchSize := m.cfg.STMBatchJudgeSize
+	for i := 0; i < len(toJudge); i += batchSize {
+		end := i + batchSize
+		if end > len(toJudge) {
+			end = len(toJudge)
+		}
+
+		batch := toJudge[i:end]
 		contents := make([]string, len(batch))
-		for j, data := range batch {
-			var rec types.Record
-			if err := json.Unmarshal([]byte(data), &rec); err == nil {
-				contents[j] = rec.Content
-			}
+		for j, rec := range batch {
+			contents[j] = rec.Content
 		}
 
 		// 调用判定模型
@@ -52,14 +75,31 @@ func (m *Manager) JudgeAndStageFromSTM(ctx context.Context, userID, sessionID st
 			continue
 		}
 
-		// 添加到Staging
+		// 添加到Staging并标记为已判定
 		for j, result := range results {
 			if result.ShouldStage && result.ValueScore >= m.cfg.StagingValueThreshold {
-				if err := m.stagingStore.AddOrIncrement(ctx, userID, contents[j], result); err != nil {
+				// 【优化】先总结重构，存储精炼后的内容到Staging
+				summary, err := m.judge.SummarizeAndRestructure(ctx, contents[j], result.Category)
+				if err != nil {
+					logger.Error("总结重构失败，使用原文", err)
+					summary = contents[j] // 降级：使用原始内容
+				}
+
+				// 存储总结后的内容（原始内容已在STM中，无需重复存储）
+				if err := m.stagingStore.AddOrIncrement(ctx, userID, summary, result, m.embedder); err != nil {
 					logger.Error("添加到暂存区失败", err)
 				}
 			}
+
+			// 标记为已判定
+			m.stmStore.SAdd(ctx, judgedSetKey, batch[j].ID)
 		}
+	}
+
+	// 设置judged Set的过期时间（与STM Key一致）
+	if m.cfg.STMExpirationDays > 0 {
+		expiration := time.Duration(m.cfg.STMExpirationDays) * 24 * time.Hour
+		m.stmStore.Expire(ctx, judgedSetKey, expiration)
 	}
 
 	return nil
@@ -100,21 +140,90 @@ func (m *Manager) PromoteStagingToLTM(ctx context.Context) error {
 
 // promoteSingleEntry 晋升单条记忆到LTM
 func (m *Manager) promoteSingleEntry(ctx context.Context, entry *types.StagingEntry, confirmedBy string) error {
-	// 1. 提取结构化标签（使用更强大的模型）
-	tags, entities, err := m.judge.ExtractStructuredTags(ctx, entry.Content, entry.Category)
+	// 1. Staging中已经存储了总结后的内容，直接使用
+	summary := entry.Content
+
+	// 2. 生成Embedding（如果Staging中没有embedding，则重新生成）
+	var vector []float32
+	var err error
+
+	if len(entry.Embedding) > 0 {
+		// 复用Staging中的embedding
+		vector = entry.Embedding
+	} else {
+		// 重新生成embedding
+		vector, err = m.embedder.EmbedQuery(ctx, summary)
+		if err != nil {
+			return fmt.Errorf("生成embedding失败: %w", err)
+		}
+	}
+
+	// 3. 【需求5-方案1】在LTM中搜索相似记忆
+	filters := map[string]interface{}{"user_id": entry.UserID}
+	similarRecords, _ := m.vectorStore.Search(ctx, vector, 1, 0.95, filters)
+
+	if len(similarRecords) > 0 {
+		// 4a. 找到相似记忆，调用智能合并策略
+		existing := similarRecords[0]
+		strategy, mergedContent, err := m.judge.DecideMergeStrategy(ctx, existing.Content, summary)
+		if err != nil {
+			logger.Error("合并策略判定失败", err)
+			strategy = "keep_both" // 降级：都保留
+		}
+
+		switch strategy {
+		case "update_existing":
+			// 只更新访问计数和衰减分数
+			if count, ok := existing.Metadata["access_count"].(int); ok {
+				existing.Metadata["access_count"] = count + 1
+			} else {
+				existing.Metadata["access_count"] = 1
+			}
+			existing.Metadata["decay_score"] = 1.0
+			existing.Metadata["last_access_at"] = time.Now()
+			m.vectorStore.Update(ctx, existing)
+			logger.System("LTM去重：更新计数", "strategy", strategy, "existing_id", existing.ID)
+
+		case "merge":
+			// 合并内容并更新
+			existing.Content = mergedContent
+			newVector, _ := m.embedder.EmbedQuery(ctx, mergedContent)
+			if newVector != nil {
+				existing.Embedding = newVector
+			}
+			if count, ok := existing.Metadata["access_count"].(int); ok {
+				existing.Metadata["access_count"] = count + 1
+			}
+			existing.Metadata["decay_score"] = 1.0
+			m.vectorStore.Update(ctx, existing)
+			logger.System("LTM去重：合并内容", "strategy", strategy, "existing_id", existing.ID)
+
+		case "keep_newer":
+			// 删除旧记录，创建新记录
+			m.vectorStore.Delete(ctx, []string{existing.ID})
+			goto createNew
+
+		case "keep_both":
+			// 都保留，正常创建新记录
+			goto createNew
+		}
+
+		// 删除Staging条目
+		m.stagingStore.Delete(ctx, entry.ID)
+		return nil
+	}
+
+createNew:
+	// 4b. 无相似记忆，正常创建
+	// 提取结构化标签（使用更强大的模型）
+	tags, entities, err := m.judge.ExtractStructuredTags(ctx, summary, entry.Category)
 	if err != nil {
 		// 降级使用预提取的标签
 		tags = entry.ExtractedTags
 		entities = entry.ExtractedEntities
 	}
 
-	// 2. 生成Embedding
-	vector, err := m.embedder.EmbedQuery(ctx, entry.Content)
-	if err != nil {
-		return fmt.Errorf("生成embedding失败: %w", err)
-	}
-
-	// 3. 构建LTM记录
+	// 构建LTM记录
 	now := time.Now()
 	metadata := types.LTMMetadata{
 		UserID:           entry.UserID,
@@ -124,7 +233,7 @@ func (m *Manager) promoteSingleEntry(ctx context.Context, entry *types.StagingEn
 		Category:         entry.Category,
 		LastAccessAt:     now,
 		AccessCount:      0,
-		DecayScore:       1.0, // 初始分数
+		DecayScore:       1.0,
 		SourceType:       "staging",
 		ConfidenceOrigin: entry.ConfidenceScore,
 	}
@@ -144,24 +253,24 @@ func (m *Manager) promoteSingleEntry(ctx context.Context, entry *types.StagingEn
 
 	ltmRecord := types.Record{
 		ID:        uuid.New().String(),
-		Content:   entry.Content,
+		Content:   summary, // 使用总结后的内容
 		Embedding: vector,
 		Timestamp: entry.LastSeenAt,
-		Metadata:  metadataMap, // Keep metadataMap for compatibility with types.Record.Metadata
+		Metadata:  metadataMap,
 		Type:      types.LongTerm,
 	}
 
-	// 4. 写入LTM
+	// 写入LTM
 	if err := m.vectorStore.Add(ctx, []types.Record{ltmRecord}); err != nil {
 		return fmt.Errorf("写入LTM失败: %w", err)
 	}
 
-	// 5. 删除Staging条目
+	// 删除Staging条目
 	if err := m.stagingStore.Delete(ctx, entry.ID); err != nil {
 		logger.Error("删除暂存区条目失败", err)
 	}
 
-	logger.MemoryPromotion(string(entry.Category), confirmedBy, entry.ConfidenceScore, entry.Content)
+	logger.MemoryPromotion(string(entry.Category), confirmedBy, entry.ConfidenceScore, summary)
 	return nil
 }
 
@@ -335,7 +444,26 @@ func (m *Manager) startBackgroundTasks() {
 		}
 	}()
 
-	logger.System("✅ 后台调度器已启动: STM清洗 + Staging晋升 + 记忆衰减")
+	// 任务4：定期LTM去重（每周执行）
+	m.wg.Add(1)
+	go func() {
+		defer m.wg.Done()
+		ticker := time.NewTicker(time.Hour * 24 * 7) // 每周
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				if err := m.DeduplicateLTM(m.ctx); err != nil {
+					logger.Error("LTM去重任务失败", err)
+				}
+			case <-m.ctx.Done():
+				return
+			}
+		}
+	}()
+
+	logger.System("✅ 后台调度器已启动: STM清洗 + Staging晋升 + 记忆衰减 + LTM去重")
 }
 
 // Shutdown 优雅关闭

@@ -3,6 +3,7 @@ package memory
 import (
 	"ai-memory/pkg/types"
 	"context"
+	"time"
 )
 
 // Memory is the high-level interface for interacting with the agent's memory.
@@ -58,6 +59,7 @@ type KVStore interface {
 // ListStore abstracts list-based storage for Short-Term Memory (Session).
 type ListStore interface {
 	RPush(ctx context.Context, key string, values ...interface{}) error
+	RPushWithExpire(ctx context.Context, key string, expirationDays int, values ...interface{}) error
 	LRange(ctx context.Context, key string, start, stop int) ([]string, error)
 	Del(ctx context.Context, keys ...string) error
 	// ScanKeys returns keys matching a pattern (e.g. for finding user sessions).
@@ -68,6 +70,11 @@ type ListStore interface {
 
 	// Get searches for a record by ID across all lists.
 	Get(ctx context.Context, id string) (*types.Record, error)
+
+	// Set operations for judged record tracking
+	SIsMember(ctx context.Context, key string, member interface{}) (bool, error)
+	SAdd(ctx context.Context, key string, members ...interface{}) error
+	Expire(ctx context.Context, key string, expiration time.Duration) error
 }
 
 // EndUserStore manages end users in persistent storage (MySQL).

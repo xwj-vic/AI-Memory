@@ -3,10 +3,10 @@ package store
 import (
 	"ai-memory/pkg/types"
 	"context"
+	"crypto/md5"
 	"encoding/json"
 	"fmt"
-	"strconv"
-	"strings"
+	"math"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -27,8 +27,40 @@ func NewStagingStore(client *redis.Client, ttlDays int) *StagingStore {
 }
 
 // AddOrIncrement 添加或更新暂存区条目（频次+1）
-func (s *StagingStore) AddOrIncrement(ctx context.Context, userID, content string, judgeResult *types.JudgeResult) error {
-	// 使用content hash作为key（简化版，实际可用MD5）
+// 【需求3.1】集成语义去重：使用向量相似度检测
+func (s *StagingStore) AddOrIncrement(ctx context.Context, userID, content string, judgeResult *types.JudgeResult, embedder Embedder) error {
+	// 1. 生成embedding（用于语义去重）
+	var embedding []float32
+	var err error
+	if embedder != nil {
+		embedding, err = embedder.EmbedQuery(ctx, content)
+		if err != nil {
+			// 降级：embedding失败不影响主流程
+			embedding = nil
+		}
+	}
+
+	// 2. 语义去重：搜索相似的已有条目
+	if embedding != nil {
+		similarEntry, _ := s.SearchSimilar(ctx, userID, embedding, 0.95)
+		if similarEntry != nil {
+			// 找到相似条目，增加计数
+			similarEntry.OccurrenceCount++
+			similarEntry.LastSeenAt = time.Now()
+			similarEntry.ValueScore = judgeResult.ValueScore
+			similarEntry.ConfidenceScore = judgeResult.ConfidenceScore
+			similarEntry.Category = judgeResult.Category
+			similarEntry.ExtractedTags = judgeResult.Tags
+			similarEntry.ExtractedEntities = judgeResult.Entities
+
+			// 更新
+			data, _ := json.Marshal(similarEntry)
+			s.client.Set(ctx, similarEntry.ID, data, s.ttl)
+			return nil
+		}
+	}
+
+	// 3. 无相似条目或embedding失败，使用原有逻辑（hash去重）
 	entryID := fmt.Sprintf("staging:%s:%s", userID, hash(content))
 
 	// 检查是否已存在
@@ -66,6 +98,7 @@ func (s *StagingStore) AddOrIncrement(ctx context.Context, userID, content strin
 		entry = types.StagingEntry{
 			ID:                entryID,
 			Content:           content,
+			Embedding:         embedding, // 存储embedding
 			UserID:            userID,
 			FirstSeenAt:       now,
 			LastSeenAt:        now,
@@ -90,6 +123,59 @@ func (s *StagingStore) AddOrIncrement(ctx context.Context, userID, content strin
 	}
 
 	return nil
+}
+
+// SearchSimilar 在Staging中搜索语义相似的条目
+// 参数：
+//   - userID: 用户ID（只在该用户的Staging中搜索）
+//   - queryVector: 查询向量
+//   - threshold: 相似度阈值（0.95表示95%相似）
+//
+// 返回：最相似的条目（如无则返回nil）
+func (s *StagingStore) SearchSimilar(ctx context.Context, userID string, queryVector []float32, threshold float64) (*types.StagingEntry, error) {
+	pattern := fmt.Sprintf("staging:%s:*", userID)
+	var cursor uint64
+	var bestEntry *types.StagingEntry
+	var bestSimilarity float64
+
+	for {
+		keys, nextCursor, err := s.client.Scan(ctx, cursor, pattern, 100).Result()
+		if err != nil {
+			return nil, err
+		}
+
+		for _, key := range keys {
+			data, err := s.client.Get(ctx, key).Result()
+			if err != nil {
+				continue
+			}
+
+			var entry types.StagingEntry
+			if err := json.Unmarshal([]byte(data), &entry); err != nil {
+				continue
+			}
+
+			// 跳过没有embedding的条目
+			if len(entry.Embedding) == 0 {
+				continue
+			}
+
+			// 计算余弦相似度
+			similarity := cosineSimilarity(queryVector, entry.Embedding)
+
+			if similarity > threshold && similarity > bestSimilarity {
+				bestSimilarity = similarity
+				bestEntry = &entry
+			}
+		}
+
+		cursor = nextCursor
+		if cursor == 0 {
+			break
+		}
+	}
+
+	return bestEntry, nil
 }
 
 // GetPendingEntries 获取待晋升的暂存区条目
@@ -199,12 +285,34 @@ func (s *StagingStore) DeleteBatch(ctx context.Context, entryIDs []string) error
 	return s.client.Del(ctx, entryIDs...).Err()
 }
 
-// hash 简单哈希函数（实际生产应使用MD5或更健壮的方法）
+// hash 使用 MD5 生成唯一哈希值
 func hash(s string) string {
-	s = strings.ReplaceAll(s, " ", "")
-	s = strings.ToLower(s)
-	if len(s) > 50 {
-		s = s[:50]
+	h := md5.New()
+	h.Write([]byte(s))
+	return fmt.Sprintf("%x", h.Sum(nil))[:16] // 取前16位，足够唯一且简洁
+}
+
+// cosineSimilarity 计算余弦相似度
+func cosineSimilarity(a, b []float32) float64 {
+	if len(a) != len(b) || len(a) == 0 {
+		return 0
 	}
-	return strconv.FormatUint(uint64(len(s))*997+uint64(s[0])*31, 36)
+
+	var dotProduct, normA, normB float64
+	for i := range a {
+		dotProduct += float64(a[i]) * float64(b[i])
+		normA += float64(a[i]) * float64(a[i])
+		normB += float64(b[i]) * float64(b[i])
+	}
+
+	if normA == 0 || normB == 0 {
+		return 0
+	}
+
+	return dotProduct / (math.Sqrt(normA) * math.Sqrt(normB))
+}
+
+// Embedder 接口定义
+type Embedder interface {
+	EmbedQuery(ctx context.Context, text string) ([]float32, error)
 }

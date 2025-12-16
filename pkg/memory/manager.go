@@ -97,7 +97,7 @@ func (m *Manager) Add(ctx context.Context, userID string, sessionID string, inpu
 
 	// Push to Redis List associated with User AND Session
 	key := fmt.Sprintf("memory:stm:%s:%s", userID, sessionID)
-	if err := m.stmStore.RPush(ctx, key, data); err != nil {
+	if err := m.stmStore.RPushWithExpire(ctx, key, m.cfg.STMExpirationDays, data); err != nil {
 		return fmt.Errorf("failed to add to STM: %w", err)
 	}
 

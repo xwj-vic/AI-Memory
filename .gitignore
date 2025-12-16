@@ -23,3 +23,6 @@ Thumbs.db
 # Data
 storage/
 memory.json
+
+# log
+ai_memory.log

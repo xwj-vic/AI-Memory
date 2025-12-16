@@ -168,3 +168,96 @@ func (j *Judge) ExtractStructuredTags(ctx context.Context, content string, categ
 
 	return result.Tags, result.Entities, nil
 }
+
+// SummarizeAndRestructure 将原始记忆总结为"独立可读"的事实陈述
+// 输入：原始对话/事件内容
+// 输出：结构化摘要（脱离上下文依然可读）
+func (j *Judge) SummarizeAndRestructure(ctx context.Context, rawContent string, category types.MemoryCategory) (string, error) {
+	prompt := fmt.Sprintf(`你是记忆重构专家。将以下对话/事件转换为独立的事实陈述。
+
+原始内容：
+%s
+
+分类：%s
+
+重构要求：
+1. **独立可读**：移除"用户说"、"AI回复"等对话标记，转为客观事实
+2. **第三人称**：使用"该用户"或具体人名
+3. **完整信息**：包含所有关键信息（时间、地点、偏好、目标等）
+4. **简洁准确**：1-3句话概括核心事实
+
+输出格式：纯文本，不要JSON，直接输出重构后的独立事实陈述。
+
+示例：
+输入："User: 我喜欢Python\nAI: 好的，记住了"
+输出："该用户偏好使用Python编程语言"`, rawContent, category)
+
+	response, err := j.llm.GenerateText(ctx, prompt)
+	if err != nil {
+		return "", fmt.Errorf("总结重构失败: %w", err)
+	}
+
+	// 清理响应
+	summary := strings.TrimSpace(response)
+	summary = strings.Trim(summary, "\"") // 移除可能的引号
+
+	if len(summary) == 0 {
+		return rawContent, nil // 降级：返回原文
+	}
+
+	return summary, nil
+}
+
+// DecideMergeStrategy LLM判断两条相似记忆的合并策略
+// 返回：策略类型 + 合并后内容（如适用）
+func (j *Judge) DecideMergeStrategy(ctx context.Context, memory1, memory2 string) (strategy string, merged string, err error) {
+	prompt := fmt.Sprintf(`你是记忆管理专家。分析两条相似的长期记忆，判断如何处理。
+
+【记忆A】（已存在）：
+%s
+
+【记忆B】（新发现）：
+%s
+
+评估维度：
+1. 信息重复度：内容是否高度重叠
+2. 时间关系：是否存在信息更新/演化
+3. 独立性：是否为不同时间点的独立事实
+
+选择策略（严格输出JSON）：
+{
+  "strategy": "update_existing|merge|keep_both|keep_newer",
+  "reason": "简短理由",
+  "merged_content": "如选择merge，输出合并后的独立事实陈述"
+}
+
+策略说明：
+- update_existing: 记忆B与A高度重复，只更新A的访问计数
+- merge: 记忆B包含A的升级信息，合并为更完整的事实
+- keep_both: 两条记忆代表不同阶段的独立事实，都保留
+- keep_newer: 记忆B完全替代A，删除A保留B`, memory1, memory2)
+
+	response, err := j.llm.GenerateText(ctx, prompt)
+	if err != nil {
+		return "", "", fmt.Errorf("LLM合并策略判定失败: %w", err)
+	}
+
+	// 清理响应
+	response = strings.TrimSpace(response)
+	response = strings.TrimPrefix(response, "```json")
+	response = strings.TrimPrefix(response, "```")
+	response = strings.TrimSuffix(response, "```")
+	response = strings.TrimSpace(response)
+
+	var result struct {
+		Strategy      string `json:"strategy"`
+		Reason        string `json:"reason"`
+		MergedContent string `json:"merged_content"`
+	}
+
+	if err := json.Unmarshal([]byte(response), &result); err != nil {
+		return "", "", fmt.Errorf("解析合并策略失败: %w", err)
+	}
+
+	return result.Strategy, result.MergedContent, nil
+}

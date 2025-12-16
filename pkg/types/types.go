@@ -64,27 +64,20 @@ type LTMMetadata struct {
 
 // StagingEntry 暂存区条目（候选记忆）
 type StagingEntry struct {
-	ID      string `json:"id"`
-	Content string `json:"content"`
-	UserID  string `json:"user_id"`
-
-	// 频次验证
-	FirstSeenAt     time.Time `json:"first_seen_at"`
-	LastSeenAt      time.Time `json:"last_seen_at"`
-	OccurrenceCount int       `json:"occurrence_count"`
-
-	// 价值判定
-	ValueScore      float64        `json:"value_score"`      // LLM评分 (0-1)
-	ConfidenceScore float64        `json:"confidence_score"` // 信心分数 (0-1)
-	Category        MemoryCategory `json:"category"`
-
-	// 结构化提取（预提取）
+	ID                string            `json:"id"`
+	Content           string            `json:"content"`
+	Embedding         []float32         `json:"embedding,omitempty"` // 新增：用于语义去重
+	UserID            string            `json:"user_id"`
+	FirstSeenAt       time.Time         `json:"first_seen_at"`
+	LastSeenAt        time.Time         `json:"last_seen_at"`
+	OccurrenceCount   int               `json:"occurrence_count"`
+	ValueScore        float64           `json:"value_score"`
+	ConfidenceScore   float64           `json:"confidence_score"`
+	Category          MemoryCategory    `json:"category"`
 	ExtractedTags     []string          `json:"extracted_tags"`
 	ExtractedEntities map[string]string `json:"extracted_entities"`
-
-	// 状态管理
-	Status      StagingStatus `json:"status"`
-	ConfirmedBy string        `json:"confirmed_by"` // auto/user
+	Status            StagingStatus     `json:"status"`
+	ConfirmedBy       string            `json:"confirmed_by"` // auto/user
 }
 
 // JudgeResult LLM判定模型的输出
