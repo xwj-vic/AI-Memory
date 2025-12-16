@@ -6,6 +6,8 @@ bin/
 *.exe
 *.test
 *.out
+__debug_bin*
+ai-memory
 
 # Dependency directories (optional, depending on strategy)
 vendor/

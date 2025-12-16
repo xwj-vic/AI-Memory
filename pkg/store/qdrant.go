@@ -224,15 +224,81 @@ func (s *QdrantStore) Search(ctx context.Context, vector []float32, limit int, s
 			typeStr = val.GetStringValue()
 		}
 
+		// Extract metadata
+		metadata := make(map[string]interface{})
+		if val, ok := payload["metadata"]; ok {
+			metadata = extractMetadata(val)
+		}
+
 		rec := types.Record{
 			ID:        hit.Id.GetUuid(),
 			Content:   content,
 			Type:      types.MemoryType(typeStr),
 			Timestamp: ts,
+			Metadata:  metadata,
 		}
 		records = append(records, rec)
 	}
 	return records, nil
+}
+
+// extractMetadata 递归解析Qdrant的Value结构为map[string]interface{}
+func extractMetadata(val *qdrant.Value) map[string]interface{} {
+	result := make(map[string]interface{})
+
+	if val == nil {
+		return result
+	}
+
+	// Qdrant的Value可能是struct
+	if structVal := val.GetStructValue(); structVal != nil {
+		for k, v := range structVal.Fields {
+			result[k] = extractValue(v)
+		}
+	}
+
+	return result
+}
+
+// extractValue 递归解析单个Value
+func extractValue(val *qdrant.Value) interface{} {
+	if val == nil {
+		return nil
+	}
+
+	// 根据不同的类型返回不同的值
+	if strVal := val.GetStringValue(); strVal != "" {
+		return strVal
+	}
+	if intVal := val.GetIntegerValue(); intVal != 0 {
+		return intVal
+	}
+	if doubleVal := val.GetDoubleValue(); doubleVal != 0.0 {
+		return doubleVal
+	}
+	if boolVal := val.GetBoolValue(); boolVal {
+		return boolVal
+	}
+
+	// List类型
+	if listVal := val.GetListValue(); listVal != nil {
+		var arr []interface{}
+		for _, item := range listVal.Values {
+			arr = append(arr, extractValue(item))
+		}
+		return arr
+	}
+
+	// Struct类型（嵌套map）
+	if structVal := val.GetStructValue(); structVal != nil {
+		nested := make(map[string]interface{})
+		for k, v := range structVal.Fields {
+			nested[k] = extractValue(v)
+		}
+		return nested
+	}
+
+	return nil
 }
 
 // Delete removes records by ID
@@ -374,20 +440,19 @@ func (s *QdrantStore) List(ctx context.Context, filters map[string]interface{}, 
 			typeStr = val.GetStringValue()
 		}
 
+		// Extract metadata
+		metadata := make(map[string]interface{})
+		if val, ok := payload["metadata"]; ok {
+			metadata = extractMetadata(val)
+		}
+
 		rec := types.Record{
 			ID:        pt.Id.GetUuid(),
 			Content:   content,
 			Type:      types.MemoryType(typeStr),
 			Timestamp: ts,
-			// Metadata could be extracted here too
+			Metadata:  metadata,
 		}
-		// Extract raw metadata for display
-		if val, ok := payload["metadata"]; ok {
-			// complex handling needed for struct value
-			// For simplicity we skip deep metadata parsing or just dump string
-			_ = val
-		}
-		// Since we didn't parse full metadata in Retrieve/Search either, we stick to core fields for list
 		records = append(records, rec)
 	}
 	return records, nil
@@ -443,12 +508,19 @@ func (s *QdrantStore) Get(ctx context.Context, id string) (*types.Record, error)
 		}
 	}
 
+	// Extract metadata
+	metadata := make(map[string]interface{})
+	if val, ok := payload["metadata"]; ok {
+		metadata = extractMetadata(val)
+	}
+
 	rec := types.Record{
 		ID:        pt.Id.GetUuid(),
 		Content:   content,
 		Type:      types.MemoryType(typeStr),
 		Timestamp: ts,
 		Embedding: emb,
+		Metadata:  metadata,
 	}
 
 	return &rec, nil

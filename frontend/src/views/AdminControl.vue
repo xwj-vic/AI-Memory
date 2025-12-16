@@ -75,19 +75,6 @@
         </div>
       </div>
 
-      <!-- 快捷操作 -->
-      <div class="section">
-        <h2>⚡ 快捷操作</h2>
-        <div class="quick-actions">
-          <button @click="runFullCycle" :disabled="processingAll" class="btn btn-large">
-            {{ processingAll ? '执行中...' : '🔁 执行完整周期 (判定→晋升→遗忘)' }}
-          </button>
-          <button @click="viewLogs" class="btn btn-secondary btn-large">
-            📋 查看系统日志
-          </button>
-        </div>
-      </div>
-
       <!-- 系统状态 -->
       <div class="section">
         <h2>📊 实时状态</h2>
