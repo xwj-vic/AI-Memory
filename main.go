@@ -21,6 +21,12 @@ func main() {
 		logger.Error("Warning loading config", err)
 	}
 
+	// 初始化Logger（必须在配置加载后立即执行）
+	if err := logger.Init(cfg); err != nil {
+		panic("Failed to initialize logger: " + err.Error())
+	}
+	defer logger.Shutdown() // 确保程序退出时关闭日志文件
+
 	ctx := context.Background()
 
 	// 2. Initialize Infrastructure

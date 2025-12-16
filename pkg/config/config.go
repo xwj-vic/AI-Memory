@@ -58,6 +58,9 @@ type Config struct {
 	// LLM判定模型配置
 	JudgeModel       string // LLM判定模型
 	ExtractTagsModel string // 标签提取模型
+
+	// 日志配置
+	LogDir string // 日志目录，默认 "log"
 }
 
 func Load() (*Config, error) {
@@ -119,6 +122,7 @@ func Load() (*Config, error) {
 		LTMDecayMinScore:      ltmDecayMinScore,
 		JudgeModel:            getEnv("JUDGE_MODEL", "gpt-4o-mini"),
 		ExtractTagsModel:      getEnv("EXTRACT_TAGS_MODEL", "gpt-4o"),
+		LogDir:                getEnv("LOG_DIR", "log"),
 	}, nil
 }
 

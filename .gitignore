@@ -27,4 +27,5 @@ storage/
 memory.json
 
 # log
+log/
 ai_memory.log
