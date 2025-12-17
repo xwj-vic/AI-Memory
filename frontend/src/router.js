@@ -24,7 +24,7 @@ const routes = [
             { path: '', redirect: 'memory' }
         ]
     },
-    { path: '/', redirect: '/admin' },
+    { path: '/', redirect: '/login' },
     { path: '/dashboard', redirect: '/admin' }
 ]
 
