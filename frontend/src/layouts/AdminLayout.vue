@@ -1,5 +1,6 @@
 <script setup>
 import { useRouter } from 'vue-router'
+import LanguageSwitcher from '../components/LanguageSwitcher.vue'
 
 const router = useRouter()
 const user = JSON.parse(localStorage.getItem('user') || '{}')
@@ -18,16 +19,19 @@ const logout = () => {
             AI Memory
         </div>
         <nav class="sidebar-nav">
-            <router-link to="/admin/memory" class="nav-item">📚 Memory Explorer</router-link>
-            <router-link to="/admin/staging" class="nav-item">🔍 Staging Review</router-link>
-            <router-link to="/admin/monitoring" class="nav-item">📊 Monitoring</router-link>
-            <router-link to="/admin/control" class="nav-item">🎛️ Control Panel</router-link>
-            <router-link to="/admin/users" class="nav-item">👥 User Management</router-link>
-            <router-link to="/admin/status" class="nav-item">⚡ System Status</router-link>
+            <router-link to="/admin/memory" class="nav-item">📚 {{ $t('nav.memory') }}</router-link>
+            <router-link to="/admin/staging" class="nav-item">🔍 {{ $t('nav.staging') }}</router-link>
+            <router-link to="/admin/monitoring" class="nav-item">📊 {{ $t('nav.monitoring') }}</router-link>
+            <router-link to="/admin/control" class="nav-item">🎛️ {{ $t('nav.control') }}</router-link>
+            <router-link to="/admin/users" class="nav-item">👥 {{ $t('nav.users') }}</router-link>
+            <router-link to="/admin/status" class="nav-item">⚡ {{ $t('nav.status') }}</router-link>
         </nav>
         <div class="sidebar-footer">
-            <div class="user-info">Logged in as {{ user.username }}</div>
-            <button @click="logout" class="btn btn-ghost w-full">Logout</button>
+            <div class="user-info">{{ $t('common.loggedInAs') }} {{ user.username }}</div>
+            <div style="display: flex; justify-content: center; margin-bottom: 12px;">
+              <LanguageSwitcher />
+            </div>
+            <button @click="logout" class="btn btn-ghost w-full">{{ $t('common.logout') }}</button>
         </div>
     </aside>
 

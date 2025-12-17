@@ -1,0 +1,231 @@
+/* Element Plus 全局样式覆盖和统一主题 */
+
+:root {
+  /* 主色调 */
+  --el-color-primary: #667eea;
+  --el-color-success: #10b981;
+  --el-color-warning: #f59e0b;
+  --el-color-danger: #ef4444;
+  --el-color-info: #3b82f6;
+
+  /* 背景色 */
+  --el-bg-color: #f9fafb;
+  --el-bg-color-page: #f3f4f6;
+
+  /* 文字颜色 */
+  --el-text-color-primary: #1f2937;
+  --el-text-color-regular: #4b5563;
+  --el-text-color-secondary: #6b7280;
+  --el-text-color-placeholder: #9ca3af;
+
+  /* 边框 */
+  --el-border-radius-base: 8px;
+  --el-border-radius-small: 6px;
+  --el-border-radius-round: 20px;
+
+  /* 阴影 */
+  --el-box-shadow-light: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --el-box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  --el-box-shadow-dark: 0 8px 24px rgba(0, 0, 0, 0.16);
+}
+
+/* 统一页面布局 - 铺满全屏 */
+.explorer-page,
+.staging-review,
+.monitoring-dashboard {
+  padding: 24px;
+  width: 100%;
+  margin: 0;
+  background: var(--el-bg-color-page);
+  min-height: 100vh;
+}
+
+/* Card 统一样式 */
+.el-card {
+  border-radius: var(--el-border-radius-base);
+  border: none;
+  box-shadow: var(--el-box-shadow-light);
+  transition: all 0.3s;
+}
+
+.el-card:hover {
+  box-shadow: var(--el-box-shadow);
+  transform: translateY(-2px);
+}
+
+.el-card__header {
+  border-bottom: 1px solid #f0f0f0;
+  padding: 16px 20px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
+/* Button 增强 */
+.el-button {
+  border-radius: var(--el-border-radius-small);
+  font-weight: 500;
+  transition: all 0.3s;
+}
+
+.el-button--primary {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  border: none;
+}
+
+.el-button--primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+/* Statistic 卡片样式 */
+.el-statistic {
+  text-align: center;
+}
+
+.el-statistic__head {
+  color: var(--el-text-color-secondary);
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+.el-statistic__content {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--el-text-color-primary);
+}
+
+/* Timeline  美化 */
+.el-timeline-item__timestamp {
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+}
+
+/* Tag 样式 */
+.el-tag {
+  border-radius: var(--el-border-radius-small);
+  border: none;
+  font-weight: 500;
+}
+
+/* Page Header 样式 */
+.el-page-header {
+  margin-bottom: 24px;
+  padding: 20px;
+  background: white;
+  border-radius: var(--el-border-radius-base);
+  box-shadow: var(--el-box-shadow-light);
+}
+
+.page-header-content {
+  display: flex;
+  align-items: center;
+}
+
+.header-title {
+  font-size: 24px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* 卡片头部统一样式 */
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.card-header .el-icon {
+  font-size: 20px;
+}
+
+/* 统计卡片行样式 */
+.metrics-row {
+  margin-bottom: 24px;
+}
+
+.metrics-row .stat-card {
+  height: 100%;
+}
+
+.metrics-row .stat-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--el-box-shadow-dark);
+}
+
+/* 告警卡片样式 */
+.alerts-card {
+  margin-bottom: 24px;
+}
+
+.alerts-card .el-timeline {
+  padding-top: 16px;
+}
+
+/* 响应式布局 */
+@media (max-width: 768px) {
+
+  .explorer-page,
+  .staging-review,
+  .monitoring-dashboard {
+    padding: 16px;
+  }
+
+  .header-title {
+    font-size: 20px;
+  }
+
+  .el-page-header {
+    padding: 16px;
+  }
+}
+
+/* 滚动条美化 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* 动画效果 */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* 空状态样式 */
+.el-empty {
+  padding: 60px 0;
+}
+
+.el-empty__description {
+  color: var(--el-text-color-secondary);
+  font-size: 14px;
+}

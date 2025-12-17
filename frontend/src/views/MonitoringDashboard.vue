@@ -1,82 +1,112 @@
 <template>
   <div class="monitoring-dashboard">
-    <div class="dashboard-header">
-      <h1>📊 记忆系统监控中心</h1>
-      
-      <!-- 工具栏 -->
-      <div class="toolbar">
-        <select v-model="timeRange" @change="onTimeRangeChange" class="time-selector">
-          <option value="1h">最近1小时</option>
-          <option value="24h">最近24小时</option>
-          <option value="7d">最近7天</option>
-          <option value="30d">最近30天</option>
-        </select>
-        
-        <button @click="refreshMetrics" class="btn btn-icon" :disabled="loading">
-          <span v-if="loading">⏳</span>
-          <span v-else>🔄</span> 刷新
-        </button>
-        
-        <button @click="exportData" class="btn btn-icon">
-          📥 导出CSV
-        </button>
-      </div>
-    </div>
+    <el-page-header>
+      <template #content>
+        <div class="page-header-content">
+          <span class="header-title">{{ $t('monitoring.title') }}</span>
+        </div>
+      </template>
+      <template #extra>
+        <el-space :size="12">
+          <el-select 
+            v-model="timeRange" 
+            @change="onTimeRangeChange" 
+            :placeholder="$t('monitoring.timeRange')"
+            style="width: 140px;"
+          >
+            <el-option :label="$t('monitoring.lastHour')" value="1h" />
+            <el-option :label="$t('monitoring.last24Hours')" value="24h" />
+            <el-option :label="$t('monitoring.last7Days')" value="7d" />
+            <el-option :label="$t('monitoring.last30Days')" value="30d" />
+          </el-select>
+          
+          <el-button @click="refreshMetrics" :loading="loading">
+            <template #icon>
+              <el-icon><Refresh /></el-icon>
+            </template>
+            {{ $t('common.refresh') }}
+          </el-button>
+          
+          <el-button @click="exportData">
+            <template #icon>
+              <el-icon><Download /></el-icon>
+            </template>
+            {{ $t('common.exportCSV') }}
+          </el-button>
+        </el-space>
+      </template>
+    </el-page-header>
 
     <!-- 告警面板 -->
-    <div v-if="recentAlerts.length > 0" class="alerts-panel">
-      <h3>🚨 最近告警</h3>
-      <div class="alerts-list">
-        <div v-for="alert in recentAlerts" :key="alert.id" 
-             :class="['alert-item', alertLevelClass(alert.level)]">
-          <div class="alert-header">
-            <span class="alert-level-badge">{{ alert.level }}</span>
-            <span class="alert-time">{{ formatTime(alert.timestamp) }}</span>
-          </div>
-          <div class="alert-message">{{ alert.message }}</div>
-          <div v-if="alert.metadata" class="alert-metadata">
-            <span v-for="(value, key) in alert.metadata" :key="key" class="metadata-item">
-              {{ key }}: {{ value }}
-            </span>
-          </div>
+    <el-card v-if="recentAlerts.length > 0" class="alerts-card" shadow="hover">
+      <template #header>
+        <div class="card-header">
+          <el-icon><Warning /></el-icon>
+          <span>{{ $t('monitoring.recentAlerts') }}</span>
         </div>
-      </div>
-    </div>
+      </template>
+      <el-timeline>
+        <el-timeline-item 
+          v-for="alert in recentAlerts" 
+          :key="alert.id"
+          :type="alert.level === 'ERROR' ? 'danger' : alert.level === 'WARNING' ? 'warning' : 'info'"
+          :timestamp="formatTime(alert.timestamp)"
+          placement="top"
+        >
+          <el-tag :type="alert.level === 'ERROR' ? 'danger' : alert.level === 'WARNING' ? 'warning' : 'info'" size="small">
+            {{ alert.level }}
+          </el-tag>
+          <p style="margin: 8px 0;">{{ alert.message }}</p>
+          <el-descriptions v-if="alert.metadata" :column="2" size="small" border>
+            <el-descriptions-item v-for="(value, key) in alert.metadata" :key="key" :label="key">
+              {{ value }}
+            </el-descriptions-item>
+          </el-descriptions>
+        </el-timeline-item>
+      </el-timeline>
+    </el-card>
 
-    <div class="metrics-grid">
-      <!-- 实时统计卡片 -->
-      <div class="stat-card">
-        <div class="stat-icon">📈</div>
-        <div class="stat-content">
-          <div class="stat-value">{{ metrics.total_promotions || 0 }}</div>
-          <div class="stat-label">总晋升数</div>
-        </div>
-      </div>
-
-      <div class="stat-card">
-        <div class="stat-icon">📊</div>
-        <div class="stat-content">
-          <div class="stat-value">{{ (metrics.promotion_success_rate || 0).toFixed(1) }}%</div>
-          <div class="stat-label">晋升成功率</div>
-        </div>
-      </div>
-
-      <div class="stat-card">
-        <div class="stat-icon">⏱️</div>
-        <div class="stat-content">
-          <div class="stat-value">{{ metrics.current_queue_length || 0 }}</div>
-          <div class="stat-label">当前队列长度</div>
-        </div>
-      </div>
-
-      <div class="stat-card">
-        <div class="stat-icon">💾</div>
-        <div class="stat-content">
-          <div class="stat-value">{{ (metrics.cache_hit_rate || 0).toFixed(1) }}%</div>
-          <div class="stat-label">缓存命中率</div>
-        </div>
-      </div>
-    </div>
+    <el-row :gutter="20" class="metrics-row">
+      <el-col :xs="12" :sm="12" :md="6">
+        <el-card shadow="hover" class="stat-card">
+          <el-statistic :title="$t('monitoring.totalPromotions')" :value="metrics.total_promotions || 0">
+            <template #prefix>
+              <el-icon color="#409EFF"><TrendCharts /></el-icon>
+            </template>
+          </el-statistic>
+        </el-card>
+      </el-col>
+      
+      <el-col :xs="12" :sm="12" :md="6">
+        <el-card shadow="hover" class="stat-card">
+          <el-statistic :title="$t('monitoring.successRate')" :value="(metrics.promotion_success_rate || 0).toFixed(1)" suffix="%">
+            <template #prefix>
+              <el-icon color="#67C23A"><CircleCheckFilled /></el-icon>
+            </template>
+          </el-statistic>
+        </el-card>
+      </el-col>
+      
+      <el-col :xs="12" :sm="12" :md="6">
+        <el-card shadow="hover" class="stat-card">
+          <el-statistic :title="$t('monitoring.queueLength')" :value="metrics.current_queue_length || 0">
+            <template #prefix>
+              <el-icon color="#E6A23C"><List /></el-icon>
+            </template>
+          </el-statistic>
+        </el-card>
+      </el-col>
+      
+      <el-col :xs="12" :sm="12" :md="6">
+        <el-card shadow="hover" class="stat-card">
+          <el-statistic :title="$t('monitoring.cacheHitRate')" :value="(metrics.cache_hit_rate || 0).toFixed(1)" suffix="%">
+            <template #prefix>
+              <el-icon color="#F56C6C"><Coin /></el-icon>
+            </template>
+          </el-statistic>
+        </el-card>
+      </el-col>
+    </el-row>
 
     <!-- 图表区域 -->
     <div class="charts-grid">
@@ -399,8 +429,8 @@ export default {
 <style scoped>
 .monitoring-dashboard {
   padding: 2rem;
-  max-width: 1400px;
-  margin: 0 auto;
+  width: 100%;
+  margin: 0;
 }
 
 h1 {
