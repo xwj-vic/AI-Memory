@@ -1,6 +1,47 @@
 <template>
   <div class="monitoring-dashboard">
-    <h1>📊 记忆系统监控中心</h1>
+    <div class="dashboard-header">
+      <h1>📊 记忆系统监控中心</h1>
+      
+      <!-- 工具栏 -->
+      <div class="toolbar">
+        <select v-model="timeRange" @change="onTimeRangeChange" class="time-selector">
+          <option value="1h">最近1小时</option>
+          <option value="24h">最近24小时</option>
+          <option value="7d">最近7天</option>
+          <option value="30d">最近30天</option>
+        </select>
+        
+        <button @click="refreshMetrics" class="btn btn-icon" :disabled="loading">
+          <span v-if="loading">⏳</span>
+          <span v-else>🔄</span> 刷新
+        </button>
+        
+        <button @click="exportData" class="btn btn-icon">
+          📥 导出CSV
+        </button>
+      </div>
+    </div>
+
+    <!-- 告警面板 -->
+    <div v-if="recentAlerts.length > 0" class="alerts-panel">
+      <h3>🚨 最近告警</h3>
+      <div class="alerts-list">
+        <div v-for="alert in recentAlerts" :key="alert.id" 
+             :class="['alert-item', alertLevelClass(alert.level)]">
+          <div class="alert-header">
+            <span class="alert-level-badge">{{ alert.level }}</span>
+            <span class="alert-time">{{ formatTime(alert.timestamp) }}</span>
+          </div>
+          <div class="alert-message">{{ alert.message }}</div>
+          <div v-if="alert.metadata" class="alert-metadata">
+            <span v-for="(value, key) in alert.metadata" :key="key" class="metadata-item">
+              {{ key }}: {{ value }}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <div class="metrics-grid">
       <!-- 实时统计卡片 -->
@@ -123,7 +164,10 @@ export default {
     return {
       metrics: {},
       charts: {},
-      refreshInterval: null
+      refreshInterval: null,
+      recentAlerts: [],
+      timeRange: '24h',
+      loading: false
     }
   },
   computed: {
@@ -135,7 +179,11 @@ export default {
   },
   mounted() {
     this.loadMetrics()
-    this.refreshInterval = setInterval(() => this.loadMetrics(), 10000) // 每10秒刷新
+    this.loadAlerts()
+    this.refreshInterval = setInterval(() => {
+      this.loadMetrics()
+      this.loadAlerts()
+    }, 10000) // 每10秒刷新
   },
   beforeUnmount() {
     if (this.refreshInterval) {
@@ -152,6 +200,68 @@ export default {
       } catch (error) {
         console.error('加载监控数据失败:', error)
       }
+    },
+    async loadAlerts() {
+      try {
+        const res = await fetch('/api/alerts?limit=5')
+        const data = await res.json()
+        this.recentAlerts = data.alerts || []
+      } catch (error) {
+        console.error('加载告警数据失败:', error)
+      }
+    },
+    async refreshMetrics() {
+      this.loading = true
+      await Promise.all([this.loadMetrics(), this.loadAlerts()])
+      this.loading = false
+    },
+    onTimeRangeChange() {
+      // TODO: 根据时间范围加载数据（需要后端支持）
+      console.log('Time range changed to:', this.timeRange)
+      this.refreshMetrics()
+    },
+    exportData() {
+      // 生成CSV格式数据
+      const csvData = this.generateCSV()
+      const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' })
+      const link = document.createElement('a')
+      const url = URL.createObjectURL(blob)
+      link.setAttribute('href', url)
+      link.setAttribute('download', `metrics_${new Date().toISOString().split('T')[0]}.csv`)
+      link.style.visibility = 'hidden'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+    },
+    generateCSV() {
+      const headers = '指标名称,数值,时间'
+      const rows = [
+        `总晋升数,${this.metrics.total_promotions || 0},${new Date().toISOString()}`,
+        `总拒绝数,${this.metrics.total_rejections || 0},${new Date().toISOString()}`,
+        `总遗忘数,${this.metrics.total_forgotten || 0},${new Date().toISOString()}`,
+        `当前队列,${this.metrics.current_queue_length || 0},${new Date().toISOString()}`,
+        `晋升成功率(%),${(this.metrics.promotion_success_rate || 0).toFixed(2)},${new Date().toISOString()}`,
+        `缓存命中率(%),${(this.metrics.cache_hit_rate || 0).toFixed(2)},${new Date().toISOString()}`
+      ]
+      return [headers, ...rows].join('\n')
+    },
+    alertLevelClass(level) {
+      return {
+        'ERROR': 'alert-error',
+        'WARNING': 'alert-warning',
+        'INFO': 'alert-info'
+      }[level] || 'alert-info'
+    },
+    formatTime(timestamp) {
+      if (!timestamp) return ''
+      const date = new Date(timestamp)
+      const now = new Date()
+      const diff = Math.floor((now - date) / 1000)
+      
+      if (diff < 60) return `${diff}秒前`
+      if (diff < 3600) return `${Math.floor(diff / 60)}分钟前`
+      if (diff < 86400) return `${Math.floor(diff / 3600)}小时前`
+      return date.toLocaleString('zh-CN')
     },
     confidencePercent(level) {
       const total = this.totalConfidence
@@ -441,3 +551,145 @@ canvas {
   border-bottom: none;
 }
 </style>
+
+/* 工具栏样式 */
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.dashboard-header h1 {
+  margin: 0;
+}
+
+.toolbar {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.time-selector {
+  padding: 0.5rem 1rem;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: white;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.time-selector:hover {
+  border-color: #3b82f6;
+}
+
+.btn-icon {
+  padding: 0.5rem 1rem;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: white;
+  cursor: pointer;
+  font-size: 0.95rem;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.btn-icon:hover:not(:disabled) {
+  background: #f3f4f6;
+  border-color: #3b82f6;
+}
+
+.btn-icon:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 告警面板样式 */
+.alerts-panel {
+  background: white;
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.alerts-panel h3 {
+  margin: 0 0 1rem 0;
+  color: #374151;
+  font-size: 1.125rem;
+}
+
+.alerts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.alert-item {
+  padding: 1rem;
+  border-radius: 8px;
+  border-left: 4px solid;
+  transition: all 0.2s;
+}
+
+.alert-item:hover {
+  transform: translateX(4px);
+}
+
+.alert-error {
+  background: #fef2f2;
+  border-left-color: #ef4444;
+}
+
+.alert-warning {
+  background: #fffbeb;
+  border-left-color: #f59e0b;
+}
+
+.alert-info {
+  background: #eff6ff;
+  border-left-color: #3b82f6;
+}
+
+.alert-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.alert-level-badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  background: rgba(0,0,0,0.1);
+}
+
+.alert-time {
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+.alert-message {
+  font-size: 0.95rem;
+  color: #1f2937;
+  margin-bottom: 0.5rem;
+}
+
+.alert-metadata {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.metadata-item {
+  font-size: 0.8rem;
+  color: #6b7280;
+  background: rgba(0,0,0,0.05);
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+}

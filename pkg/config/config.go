@@ -59,6 +59,37 @@ type Config struct {
 	JudgeModel       string // LLM判定模型
 	ExtractTagsModel string // 标签提取模型
 
+	// 监控系统配置
+	MetricsPersistIntervalMinutes int // 指标持久化频率(分钟)
+	MetricsHistoryLoadHours       int // 启动时加载历史数据范围(小时)
+	MetricsMemoryRetentionHours   int // 内存中保留数据时长(小时)
+
+	// 告警引擎配置
+	AlertCheckIntervalMinutes        int     // 告警检查频率(分钟)
+	AlertQueueBacklogThreshold       int     // 队列积压告警阈值
+	AlertQueueBacklogCooldownMinutes int     // 队列告警冷却时间(分钟)
+	AlertSuccessRateThreshold        float64 // 成功率告警阈值(百分比)
+	AlertSuccessRateCooldownMinutes  int     // 成功率告警冷却时间(分钟)
+	AlertCacheHitRateThreshold       float64 // 缓存命中率告警阈值(百分比)
+	AlertCacheHitRateCooldownMinutes int     // 缓存告警冷却时间(分钟)
+	AlertDecaySpikeThreshold         int     // 衰减突增告警阈值
+	AlertDecaySpikeCooldownMinutes   int     // 衰减告警冷却时间(分钟)
+	AlertHistoryMaxSize              int     // 保留的告警历史记录数量
+
+	// 告警通知配置
+	AlertWebhookEnabled bool   // 是否启用Webhook通知
+	AlertWebhookURL     string // Webhook URL
+	AlertWebhookTimeout int    // Webhook超时时间(秒)
+	AlertEmailEnabled   bool   // 是否启用邮件通知
+	AlertEmailSMTPHost  string // SMTP服务器
+	AlertEmailSMTPPort  int    // SMTP端口
+	AlertEmailUsername  string // SMTP用户名
+	AlertEmailPassword  string // SMTP密码
+	AlertEmailFrom      string // 发件人
+	AlertEmailTo        string // 收件人(逗号分隔)
+	AlertEmailUseTLS    bool   // 是否使用TLS
+	AlertNotifyLevels   string // 需要通知的告警级别
+
 	// 日志配置
 	LogDir string // 日志目录，默认 "log"
 }
@@ -85,6 +116,29 @@ func Load() (*Config, error) {
 
 	ltmDecayHalfLifeDays, _ := strconv.Atoi(getEnv("LTM_DECAY_HALF_LIFE_DAYS", "90"))
 	ltmDecayMinScore, _ := strconv.ParseFloat(getEnv("LTM_DECAY_MIN_SCORE", "0.3"), 64)
+
+	// 监控系统配置
+	metricsPersistInterval, _ := strconv.Atoi(getEnv("METRICS_PERSIST_INTERVAL_MINUTES", "1"))
+	metricsHistoryLoadHours, _ := strconv.Atoi(getEnv("METRICS_HISTORY_LOAD_HOURS", "24"))
+	metricsMemoryRetentionHours, _ := strconv.Atoi(getEnv("METRICS_MEMORY_RETENTION_HOURS", "1"))
+
+	alertCheckInterval, _ := strconv.Atoi(getEnv("ALERT_CHECK_INTERVAL_MINUTES", "1"))
+	alertQueueThreshold, _ := strconv.Atoi(getEnv("ALERT_QUEUE_BACKLOG_THRESHOLD", "100"))
+	alertQueueCooldown, _ := strconv.Atoi(getEnv("ALERT_QUEUE_BACKLOG_COOLDOWN_MINUTES", "10"))
+	alertSuccessRateThreshold, _ := strconv.ParseFloat(getEnv("ALERT_SUCCESS_RATE_THRESHOLD", "60"), 64)
+	alertSuccessRateCooldown, _ := strconv.Atoi(getEnv("ALERT_SUCCESS_RATE_COOLDOWN_MINUTES", "30"))
+	alertCacheHitRateThreshold, _ := strconv.ParseFloat(getEnv("ALERT_CACHE_HIT_RATE_THRESHOLD", "20"), 64)
+	alertCacheHitRateCooldown, _ := strconv.Atoi(getEnv("ALERT_CACHE_HIT_RATE_COOLDOWN_MINUTES", "15"))
+	alertDecaySpikeThreshold, _ := strconv.Atoi(getEnv("ALERT_DECAY_SPIKE_THRESHOLD", "1000"))
+	alertDecaySpikeCooldown, _ := strconv.Atoi(getEnv("ALERT_DECAY_SPIKE_COOLDOWN_MINUTES", "60"))
+	alertHistoryMaxSize, _ := strconv.Atoi(getEnv("ALERT_HISTORY_MAX_SIZE", "100"))
+
+	// 告警通知配置
+	alertWebhookEnabled, _ := strconv.ParseBool(getEnv("ALERT_WEBHOOK_ENABLED", "false"))
+	alertWebhookTimeout, _ := strconv.Atoi(getEnv("ALERT_WEBHOOK_TIMEOUT_SECONDS", "5"))
+	alertEmailEnabled, _ := strconv.ParseBool(getEnv("ALERT_EMAIL_ENABLED", "false"))
+	alertEmailSMTPPort, _ := strconv.Atoi(getEnv("ALERT_EMAIL_SMTP_PORT", "587"))
+	alertEmailUseTLS, _ := strconv.ParseBool(getEnv("ALERT_EMAIL_USE_TLS", "true"))
 
 	return &Config{
 		RedisAddr:            getEnv("REDIS_ADDR", "localhost:6379"),
@@ -122,7 +176,37 @@ func Load() (*Config, error) {
 		LTMDecayMinScore:      ltmDecayMinScore,
 		JudgeModel:            getEnv("JUDGE_MODEL", "gpt-4o-mini"),
 		ExtractTagsModel:      getEnv("EXTRACT_TAGS_MODEL", "gpt-4o"),
-		LogDir:                getEnv("LOG_DIR", "log"),
+
+		// 监控系统配置
+		MetricsPersistIntervalMinutes:    metricsPersistInterval,
+		MetricsHistoryLoadHours:          metricsHistoryLoadHours,
+		MetricsMemoryRetentionHours:      metricsMemoryRetentionHours,
+		AlertCheckIntervalMinutes:        alertCheckInterval,
+		AlertQueueBacklogThreshold:       alertQueueThreshold,
+		AlertQueueBacklogCooldownMinutes: alertQueueCooldown,
+		AlertSuccessRateThreshold:        alertSuccessRateThreshold,
+		AlertSuccessRateCooldownMinutes:  alertSuccessRateCooldown,
+		AlertCacheHitRateThreshold:       alertCacheHitRateThreshold,
+		AlertCacheHitRateCooldownMinutes: alertCacheHitRateCooldown,
+		AlertDecaySpikeThreshold:         alertDecaySpikeThreshold,
+		AlertDecaySpikeCooldownMinutes:   alertDecaySpikeCooldown,
+		AlertHistoryMaxSize:              alertHistoryMaxSize,
+
+		// 告警通知配置
+		AlertWebhookEnabled: alertWebhookEnabled,
+		AlertWebhookURL:     getEnv("ALERT_WEBHOOK_URL", ""),
+		AlertWebhookTimeout: alertWebhookTimeout,
+		AlertEmailEnabled:   alertEmailEnabled,
+		AlertEmailSMTPHost:  getEnv("ALERT_EMAIL_SMTP_HOST", "smtp.example.com"),
+		AlertEmailSMTPPort:  alertEmailSMTPPort,
+		AlertEmailUsername:  getEnv("ALERT_EMAIL_USERNAME", ""),
+		AlertEmailPassword:  getEnv("ALERT_EMAIL_PASSWORD", ""),
+		AlertEmailFrom:      getEnv("ALERT_EMAIL_FROM", "AI-Memory Alert <alert@example.com>"),
+		AlertEmailTo:        getEnv("ALERT_EMAIL_TO", ""),
+		AlertEmailUseTLS:    alertEmailUseTLS,
+		AlertNotifyLevels:   getEnv("ALERT_NOTIFY_LEVELS", "ERROR,WARNING"),
+
+		LogDir: getEnv("LOG_DIR", "log"),
 	}, nil
 }
 

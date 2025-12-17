@@ -41,6 +41,11 @@ var globalMetrics = &MetricsCollector{
 	CategoryHistory:    make([]CategoryCount, 0),
 }
 
+// GetGlobalMetrics 获取全局指标收集器实例（供main.go等外部使用）
+func GetGlobalMetrics() *MetricsCollector {
+	return globalMetrics
+}
+
 // RecordPromotion 记录晋升事件
 func (mc *MetricsCollector) RecordPromotion(category string, success bool) {
 	mc.mu.Lock()

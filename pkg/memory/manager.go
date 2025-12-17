@@ -31,6 +31,7 @@ type Manager struct {
 	judge           *Judge
 	stagingStore    *store.StagingStore
 	decayCalculator *DecayCalculator
+	alertEngine     *AlertEngine // 告警引擎
 
 	// 后台任务控制
 	ctx    context.Context
@@ -60,6 +61,22 @@ func NewManager(cfg *config.Config, vStore VectorStore, lStore ListStore, uStore
 		ctx:             ctx,
 		cancel:          cancel,
 	}
+
+	// 初始化告警引擎
+	alertConfig := &AlertConfig{
+		CheckIntervalMinutes:        cfg.AlertCheckIntervalMinutes,
+		QueueBacklogThreshold:       cfg.AlertQueueBacklogThreshold,
+		QueueBacklogCooldownMinutes: cfg.AlertQueueBacklogCooldownMinutes,
+		SuccessRateThreshold:        cfg.AlertSuccessRateThreshold,
+		SuccessRateCooldownMinutes:  cfg.AlertSuccessRateCooldownMinutes,
+		CacheHitRateThreshold:       cfg.AlertCacheHitRateThreshold,
+		CacheHitRateCooldownMinutes: cfg.AlertCacheHitRateCooldownMinutes,
+		DecaySpikeThreshold:         cfg.AlertDecaySpikeThreshold,
+		DecaySpikeCooldownMinutes:   cfg.AlertDecaySpikeCooldownMinutes,
+		HistoryMaxSize:              cfg.AlertHistoryMaxSize,
+	}
+	m.alertEngine = NewAlertEngine(GetGlobalMetrics(), stagingStore, alertConfig)
+	m.alertEngine.Start(ctx)
 
 	// 启动后台协程
 	m.startBackgroundTasks()
@@ -157,103 +174,6 @@ func (m *Manager) Retrieve(ctx context.Context, userID string, sessionID string,
 	}
 
 	return allRecords, nil
-}
-
-// Summarize consolidates STM into LTM.
-//
-// ⚠️ 【已废弃】此方法为传统的手动汇总方案，已被漏斗型记忆系统取代
-//
-// 传统方案流程：
-//
-//	STM → 手动触发Summary → LLM生成摘要 → 直接写入LTM → 清空STM
-//
-// 新方案（漏斗型）推荐使用：
-//
-//	STM → 自动LLM判定 → Staging暂存 → 频次验证 → 人工审核 → LTM（带标签） → 衰减遗忘
-//	参见：JudgeAndStageFromSTM() 和 PromoteStagingToLTM()
-//
-// 保留此方法的原因：
-//  1. 向后兼容：现有调用代码仍可工作
-//  2. 快速汇总：某些场景下需要立即汇总（不经过漏斗）
-//  3. 手动控制：管理员可手动触发特定会话的汇总
-//
-// 建议：新项目请使用漏斗型方案，此方法仅用于兼容和特殊场景
-//
-// Deprecated: 推荐使用 JudgeAndStageFromSTM + PromoteStagingToLTM 实现自动化记忆管理
-func (m *Manager) Summarize(ctx context.Context, userID string, sessionID string) error {
-	key := fmt.Sprintf("memory:stm:%s:%s", userID, sessionID)
-
-	// 1. Fetch all STM
-	stmData, err := m.stmStore.LRange(ctx, key, 0, -1)
-	if err != nil {
-		return fmt.Errorf("failed to list STM: %w", err)
-	}
-
-	if len(stmData) < m.cfg.MinSummaryItems {
-		return nil // Not enough data to summarize
-	}
-
-	var contentBuilder string
-	for _, data := range stmData {
-		var rec types.Record
-		if err := json.Unmarshal([]byte(data), &rec); err == nil {
-			contentBuilder += rec.Content + "\n"
-		}
-	}
-
-	// 2. Generate Summary (Episodic LTM)
-	prompt := m.prompts.GetSummarizePrompt(contentBuilder)
-	summary, err := m.llm.GenerateText(ctx, prompt)
-	if err != nil {
-		return fmt.Errorf("failed to generate summary: %w", err)
-	}
-
-	// 2a. Entity Extraction
-	attrPrompt := m.prompts.GetExtractProfilePrompt(contentBuilder)
-	attributes, err := m.llm.GenerateText(ctx, attrPrompt)
-	if err == nil && len(attributes) > 10 && attributes != "None" {
-		attrVec, _ := m.embedder.EmbedQuery(ctx, attributes)
-		if attrVec != nil {
-			attrRecord := types.Record{
-				ID:        uuid.New().String(),
-				Content:   fmt.Sprintf("User Attributes identified:\n%s", attributes),
-				Embedding: attrVec,
-				Timestamp: time.Now(),
-				Metadata:  map[string]interface{}{"user_id": userID, "source_session": sessionID},
-				Type:      types.LongTerm,
-			}
-			_ = m.vectorStore.Add(ctx, []types.Record{attrRecord})
-			logger.Info("Identified and stored user attributes", "user_id", userID)
-		}
-	}
-
-	// 3. Embed Summary (Episodic)
-	vector, err := m.embedder.EmbedQuery(ctx, summary)
-	if err != nil {
-		return fmt.Errorf("failed to embed summary: %w", err)
-	}
-
-	// 4. Store in LTM
-	ltmRecord := types.Record{
-		ID:        uuid.New().String(),
-		Content:   summary,
-		Embedding: vector,
-		Timestamp: time.Now(),
-		Metadata:  map[string]interface{}{"user_id": userID, "source_session": sessionID},
-		Type:      types.LongTerm,
-	}
-
-	if err := m.vectorStore.Add(ctx, []types.Record{ltmRecord}); err != nil {
-		return fmt.Errorf("failed to store LTM: %w", err)
-	}
-
-	// 5. Clear STM (Session Specific)
-	if err := m.stmStore.Del(ctx, key); err != nil {
-		return fmt.Errorf("failed to clear STM: %w", err)
-	}
-
-	logger.System("Summarized items into LTM", "count", len(stmData), "user_id", userID, "session_id", sessionID)
-	return nil
 }
 
 // List retrieves all records with filtering.
@@ -485,4 +405,21 @@ func (m *Manager) GetSystemStatus(ctx context.Context) map[string]string {
 	}
 
 	return status
+}
+
+// GetRecentAlerts 获取最近的告警记录（供API调用）
+func (m *Manager) GetRecentAlerts(limit int) []Alert {
+	if m.alertEngine == nil {
+		return []Alert{}
+	}
+	return m.alertEngine.GetRecentAlerts(limit)
+}
+
+// SetAlertNotifier 设置告警通知器
+func (m *Manager) SetAlertNotifier(notifier *AlertNotifier) {
+	if m.alertEngine != nil {
+		m.alertEngine.SetNotifyFunc(func(alert *Alert) {
+notifier.Notify(alert)
+})
+	}
 }
