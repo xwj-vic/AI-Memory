@@ -7,6 +7,8 @@
 
 **[中文文档](./README_CN.md)** | English
 
+![alt text](image.png)
+
 > A biomimetic AI memory management framework that implements a human-like funnel memory system (STM → Staging → LTM), enabling AI agents to intelligently filter, retain, and recall valuable information.
 
 ---

@@ -7,6 +7,8 @@
 
 [English](./README.md) | **中文文档**
 
+![alt text](image.png)
+
 > 仿生AI记忆管理框架，实现人脑般的漏斗型记忆系统（STM → Staging → LTM），让AI智能体能够自动筛选、保留和回忆有价值的信息。
 
 ---
