@@ -196,10 +196,10 @@ onMounted(fetchMemories)
 </template>
 
 <style scoped>
-.dashboard {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 2rem;
+.admin-control {
+  padding: 2rem;
+  width: 100%;
+  margin: 0;
 }
 
 .header {

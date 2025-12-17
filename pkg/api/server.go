@@ -56,6 +56,9 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/admin/trigger-promotion", s.handleTriggerPromotion)
 	s.mux.HandleFunc("POST /api/admin/trigger-decay", s.handleTriggerDecay)
 
+	// 告警API
+	s.mux.HandleFunc("GET /api/alerts", s.handleGetAlerts)
+
 	// Static Files (Frontend) - Must be last to avoid catching API routes if not specific
 	fs := http.FileServer(http.Dir("./frontend/dist"))
 	s.mux.Handle("/", fs)

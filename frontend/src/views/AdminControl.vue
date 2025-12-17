@@ -1,109 +1,159 @@
 <template>
   <div class="admin-control">
-    <h1>🎛️ 系统管理控制台</h1>
+    <el-page-header>
+      <template #content>
+        <span class="page-title">{{ $t('control.title') }}</span>
+      </template>
+    </el-page-header>
 
-    <div class="control-sections">
+    <el-row :gutter="24" class="control-sections">
       <!-- 手动触发区域 -->
-      <div class="section">
-        <h2>⚡ 手动触发任务</h2>
-        <p class="section-desc">手动执行漏斗型记忆系统的后台任务</p>
-
-        <div class="trigger-cards">
-          <!-- STM判定 -->
-          <div class="trigger-card">
-            <div class="card-icon">🔍</div>
-            <div class="card-content">
-              <h3>STM判定流程</h3>
-              <p>对短期记忆进行LLM价值判定，符合条件的进入Staging暂存区</p>
-              <div class="input-group">
-                <input 
-                  v-model="judgeParams.userId" 
-                  placeholder="User ID (例: test_user)"
-                  class="input-field">
-                <input 
-                  v-model="judgeParams.sessionId" 
-                  placeholder="Session ID (例: session_1)"
-                  class="input-field">
-              </div>
-              <button 
-                @click="triggerJudge" 
-                :disabled="processing.judge"
-                class="btn btn-primary">
-                {{ processing.judge ? '处理中...' : '🚀 触发判定' }}
-              </button>
-              <div v-if="results.judge" :class="['result', results.judge.success ? 'success' : 'error']">
-                {{ results.judge.message }}
-              </div>
+      <el-col :span="24">
+        <el-card shadow="hover">
+          <template #header>
+            <div class="card-header">
+              <el-icon><Operation /></el-icon>
+              <span>{{ $t('control.manualTrigger') }}</span>
             </div>
-          </div>
+          </template>
+          <p class="section-desc">{{ $t('control.manualTriggerDesc') }}</p>
 
-          <!-- Staging晋升 -->
-          <div class="trigger-card">
-            <div class="card-icon">⬆️</div>
-            <div class="card-content">
-              <h3>Staging晋升流程</h3>
-              <p>扫描暂存区，将满足条件的记忆晋升到长期记忆（LTM）</p>
-              <button 
-                @click="triggerPromotion" 
-                :disabled="processing.promotion"
-                class="btn btn-success">
-                {{ processing.promotion ? '处理中...' : '🎯 触发晋升' }}
-              </button>
-              <div v-if="results.promotion" :class="['result', results.promotion.success ? 'success' : 'error']">
-                {{ results.promotion.message }}
-              </div>
-            </div>
-          </div>
+          <el-row :gutter="16" class="trigger-cards">
+            <!-- STM判定 -->
+            <el-col :xs="24" :sm="12" :md="8">
+              <el-card class="trigger-card" shadow="hover">
+                <div class="card-icon">🔍</div>
+                <h3>{{ $t('control.stmJudge') }}</h3>
+                <p>{{ $t('control.stmJudgeDesc') }}</p>
+                
+                <el-form label-position="top" style="margin-top: 16px;">
+                  <el-form-item label="User ID">
+                    <el-input
+                      v-model="judgeParams.userId"
+                      placeholder="例: test_user"
+                    />
+                  </el-form-item>
+                  <el-form-item label="Session ID">
+                    <el-input
+                      v-model="judgeParams.sessionId"
+                      placeholder="例: session_1"
+                    />
+                  </el-form-item>
+                </el-form>
 
-          <!-- 遗忘扫描 -->
-          <div class="trigger-card">
-            <div class="card-icon">🗑️</div>
-            <div class="card-content">
-              <h3>遗忘扫描</h3>
-              <p>扫描长期记忆，删除衰减分数过低的记忆（自动遗忘机制）</p>
-              <button 
-                @click="triggerDecay" 
-                :disabled="processing.decay"
-                class="btn btn-warning">
-                {{ processing.decay ? '处理中...' : '🔄 触发扫描' }}
-              </button>
-              <div v-if="results.decay" :class="['result', results.decay.success ? 'success' : 'error']">
-                {{ results.decay.message }}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+                <el-button
+                  type="primary"
+                  @click="triggerJudge"
+                  :loading="processing.judge"
+                  style="width: 100%;"
+                >
+                  🚀 {{ processing.judge ? $t('common.processing') : $t('common.trigger') }}
+                </el-button>
+
+                <el-alert
+                  v-if="results.judge"
+                  :type="results.judge.success ? 'success' : 'error'"
+                  :title="results.judge.message"
+                  :closable="false"
+                  style="margin-top: 12px;"
+                />
+              </el-card>
+            </el-col>
+
+            <!-- Staging晋升 -->
+            <el-col :xs="24" :sm="12" :md="8">
+              <el-card class="trigger-card" shadow="hover">
+                <div class="card-icon">⬆️</div>
+                <h3>{{ $t('control.stagingPromotion') }}</h3>
+                <p>{{ $t('control.stagingPromotionDesc') }}</p>
+                
+                <el-button
+                  type="success"
+                  @click="triggerPromotion"
+                  :loading="processing.promotion"
+                  style="width: 100%; margin-top: 60px;"
+                >
+                  🎯 {{ processing.promotion ? $t('common.processing') : $t('common.trigger') }}
+                </el-button>
+
+                <el-alert
+                  v-if="results.promotion"
+                  :type="results.promotion.success ? 'success' : 'error'"
+                  :title="results.promotion.message"
+                  :closable="false"
+                  style="margin-top: 12px;"
+                />
+              </el-card>
+            </el-col>
+
+            <!-- 遗忘扫描 -->
+            <el-col :xs="24" :sm="12" :md="8">
+              <el-card class="trigger-card" shadow="hover">
+                <div class="card-icon">🗑️</div>
+                <h3>{{ $t('control.decayScan') }}</h3>
+                <p>{{ $t('control.decayScanDesc') }}</p>
+                
+                <el-button
+                  type="warning"
+                  @click="triggerDecay"
+                  :loading="processing.decay"
+                  style="width: 100%; margin-top: 60px;"
+                >
+                  🔄 {{ processing.decay ? $t('common.processing') : $t('common.trigger') }}
+                </el-button>
+
+                <el-alert
+                  v-if="results.decay"
+                  :type="results.decay.success ? 'success' : 'error'"
+                  :title="results.decay.message"
+                  :closable="false"
+                  style="margin-top: 12px;"
+                />
+              </el-card>
+            </el-col>
+          </el-row>
+        </el-card>
+      </el-col>
 
       <!-- 系统状态 -->
-      <div class="section">
-        <h2>📊 实时状态</h2>
-        <div class="status-grid">
-          <div class="status-card">
-            <div class="status-label">STM记忆数</div>
-            <div class="status-value">{{ systemStatus.stm_count || '-' }}</div>
-          </div>
-          <div class="status-card">
-            <div class="status-label">Staging队列</div>
-            <div class="status-value">{{ systemStatus.staging_count || 0 }}</div>
-          </div>
-          <div class="status-card">
-            <div class="status-label">LTM记忆数</div>
-            <div class="status-value">{{ systemStatus.ltm_count || '-' }}</div>
-          </div>
-          <div class="status-card">
-            <div class="status-label">总晋升数</div>
-            <div class="status-value">{{ systemStatus.total_promotions || 0 }}</div>
-          </div>
-        </div>
-      </div>
-    </div>
+      <el-col :span="24" style="margin-top: 24px;">
+        <el-card shadow="hover">
+          <template #header>
+            <div class="card-header">
+              <el-icon><DataAnalysis /></el-icon>
+              <span>{{ $t('control.systemStatus') }}</span>
+            </div>
+          </template>
+          
+          <el-row :gutter="16">
+            <el-col :xs="12" :sm="6">
+              <el-statistic :title="$t('control.stmCount')" :value="systemStatus.stm_count || '-'" />
+            </el-col>
+            <el-col :xs="12" :sm="6">
+              <el-statistic :title="$t('control.stagingCount')" :value="systemStatus.staging_count || 0" />
+            </el-col>
+            <el-col :xs="12" :sm="6">
+              <el-statistic :title="$t('control.ltmCount')" :value="systemStatus.ltm_count || '-'" />
+            </el-col>
+            <el-col :xs="12" :sm="6">
+              <el-statistic :title="$t('monitoring.totalPromotions')" :value="systemStatus.total_promotions || 0" />
+            </el-col>
+          </el-row>
+        </el-card>
+      </el-col>
+    </el-row>
   </div>
 </template>
 
 <script>
+import { useI18n } from 'vue-i18n'
+
 export default {
   name: 'AdminControl',
+  setup() {
+    const { t } = useI18n()
+    return { t }
+  },
   data() {
     return {
       judgeParams: {
@@ -137,7 +187,7 @@ export default {
   methods: {
     async triggerJudge() {
       if (!this.judgeParams.userId || !this.judgeParams.sessionId) {
-        alert('请填写 User ID 和 Session ID')
+        this.$message.warning('请填写 User ID 和 Session ID')
         return
       }
 
@@ -202,7 +252,13 @@ export default {
     },
 
     async triggerDecay() {
-      if (!confirm('确认执行遗忘扫描？将删除衰减分数过低的记忆。')) {
+      try {
+        await this.$confirm('确认执行遗忘扫描？将删除衰减分数过低的记忆。', '提示', {
+          confirmButtonText: '确定',
+          cancelButtonText: '取消',
+          type: 'warning'
+        })
+      } catch {
         return
       }
 
@@ -233,58 +289,23 @@ export default {
       }
     },
 
-    async runFullCycle() {
-      if (!confirm('执行完整周期：判定→晋升→遗忘，可能需要较长时间，确认？')) {
-        return
-      }
-
-      this.processingAll = true
-
-      try {
-        // 1. 判定
-        await this.triggerJudge()
-        await new Promise(resolve => setTimeout(resolve, 2000))
-
-        // 2. 晋升
-        await this.triggerPromotion()
-        await new Promise(resolve => setTimeout(resolve, 2000))
-
-        // 3. 遗忘
-        await this.triggerDecay()
-
-        alert('✅ 完整周期执行完成！')
-      } catch (error) {
-        alert('❌ 执行出错: ' + error.message)
-      } finally {
-        this.processingAll = false
-        this.loadSystemStatus()
-      }
-    },
-
     async loadSystemStatus() {
       try {
-        // 获取Staging统计
         const stagingRes = await fetch('/api/staging/stats')
         const stagingData = await stagingRes.json()
 
-        // 获取Dashboard指标
         const metricsRes = await fetch('/api/dashboard/metrics')
         const metricsData = await metricsRes.json()
 
         this.systemStatus = {
           staging_count: stagingData.total_pending || 0,
           total_promotions: metricsData.total_promotions || 0,
-          stm_count: '≈6', // 这个需要额外API
-          ltm_count: '-'   // 这个需要额外API
+          stm_count: '≈6',
+          ltm_count: '-'
         }
       } catch (error) {
         console.error('加载状态失败:', error)
       }
-    },
-
-    viewLogs() {
-      // 打开新标签查看日志（需要后端支持）
-      alert('日志功能开发中...\n当前可查看终端输出或 /tmp/ai-memory.log')
     }
   }
 }
@@ -292,207 +313,62 @@ export default {
 
 <style scoped>
 .admin-control {
-  padding: 2rem;
-  max-width: 1400px;
-  margin: 0 auto;
+  padding: 24px;
+  width: 100%;
+  margin: 0;
 }
 
-h1 {
-  margin-bottom: 2rem;
-  color: #1f2937;
+.page-title {
+  font-size: 24px;
+  font-weight: 700;
 }
 
 .control-sections {
+  margin-top: 24px;
+}
+
+.card-header {
   display: flex;
-  flex-direction: column;
-  gap: 2rem;
-}
-
-.section {
-  background: white;
-  border-radius: 12px;
-  padding: 2rem;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-}
-
-.section h2 {
-  margin: 0 0 0.5rem 0;
-  color: #374151;
-  font-size: 1.5rem;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 600;
 }
 
 .section-desc {
   color: #6b7280;
-  margin-bottom: 1.5rem;
+  margin-bottom: 20px;
 }
 
 .trigger-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 1.5rem;
+  margin-top: 16px;
 }
 
 .trigger-card {
-  border: 2px solid #e5e7eb;
-  border-radius: 12px;
-  padding: 1.5rem;
-  transition: all 0.2s;
+  height: 100%;
+  text-align: center;
 }
 
 .trigger-card:hover {
-  border-color: #3b82f6;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.1);
+  transform: translateY(-4px);
+  transition: all 0.3s;
 }
 
 .card-icon {
-  font-size: 3rem;
-  text-align: center;
-  margin-bottom: 1rem;
+  font-size: 48px;
+  margin-bottom: 16px;
 }
 
-.card-content h3 {
-  margin: 0 0 0.5rem 0;
+.trigger-card h3 {
+  margin: 0 0 12px 0;
+  font-size: 18px;
   color: #1f2937;
-  font-size: 1.25rem;
 }
 
-.card-content p {
+.trigger-card p {
   color: #6b7280;
-  font-size: 0.875rem;
-  margin-bottom: 1rem;
-  min-height: 3rem;
-}
-
-.input-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
-}
-
-.input-field {
-  padding: 0.75rem;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  font-size: 0.875rem;
-}
-
-.input-field:focus {
-  outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-.btn {
-  width: 100%;
-  padding: 0.75rem 1.5rem;
-  border: none;
-  border-radius: 8px;
-  font-size: 1rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-primary {
-  background: #3b82f6;
-  color: white;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: #2563eb;
-}
-
-.btn-success {
-  background: #10b981;
-  color: white;
-}
-
-.btn-success:hover:not(:disabled) {
-  background: #059669;
-}
-
-.btn-warning {
-  background: #f59e0b;
-  color: white;
-}
-
-.btn-warning:hover:not(:disabled) {
-  background: #d97706;
-}
-
-.btn-secondary {
-  background: #6b7280;
-  color: white;
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background: #4b5563;
-}
-
-.btn-large {
-  padding: 1rem 2rem;
-  font-size: 1.125rem;
-}
-
-.result {
-  margin-top: 1rem;
-  padding: 0.75rem;
-  border-radius: 6px;
-  font-size: 0.875rem;
-}
-
-.result.success {
-  background: #d1fae5;
-  color: #065f46;
-  border: 1px solid #10b981;
-}
-
-.result.error {
-  background: #fee2e2;
-  color: #991b1b;
-  border: 1px solid #ef4444;
-}
-
-.quick-actions {
-  display: flex;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-
-.quick-actions .btn {
-  flex: 1;
-  min-width: 200px;
-}
-
-.status-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 1rem;
-}
-
-.status-card {
-  background: #f9fafb;
-  border-radius: 8px;
-  padding: 1.5rem;
-  text-align: center;
-  border: 1px solid #e5e7eb;
-}
-
-.status-label {
-  font-size: 0.875rem;
-  color: #6b7280;
-  margin-bottom: 0.5rem;
-}
-
-.status-value {
-  font-size: 2rem;
-  font-weight: bold;
-  color: #1f2937;
+  font-size: 14px;
+  margin-bottom: 16px;
+  min-height: 60px;
 }
 </style>

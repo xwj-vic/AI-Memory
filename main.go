@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"strings"
+	"time"
 
 	"ai-memory/pkg/api"
 	"ai-memory/pkg/auth"
@@ -111,6 +113,73 @@ func main() {
 	}
 
 	memoryManager := memory.NewManager(cfg, vectorStore, redisStore, endUserStore, embedderClient, llmClient, redisStore)
+
+	// 初始化监控指标持久化
+	if mysqlDB != nil {
+		metricsPersistence := memory.NewMetricsPersistence(mysqlDB, cfg.MetricsPersistIntervalMinutes)
+
+		// 启动时加载累计统计
+		if err := metricsPersistence.LoadCumulativeStats(ctx, memory.GetGlobalMetrics()); err != nil {
+			logger.Error("Failed to load cumulative stats, starting fresh", err)
+		} else {
+			logger.System("✅ Loaded metrics from database")
+		}
+
+		// 加载历史时间序列数据（使用配置的小时数）
+		if err := metricsPersistence.LoadRecentTimeSeries(ctx, memory.GetGlobalMetrics(), cfg.MetricsHistoryLoadHours); err != nil {
+			logger.Error("Failed to load timeseries data", err)
+		}
+
+		// 启动定时持久化任务
+		metricsPersistence.Start(memory.GetGlobalMetrics())
+		defer metricsPersistence.Stop()
+	}
+
+	// 初始化告警通知器
+	if cfg.AlertWebhookEnabled || cfg.AlertEmailEnabled {
+		// 解析需要通知的告警级别
+		notifyLevels := make(map[memory.AlertLevel]bool)
+		for _, level := range strings.Split(cfg.AlertNotifyLevels, ",") {
+			level = strings.TrimSpace(level)
+			switch level {
+			case "ERROR":
+				notifyLevels[memory.AlertLevelError] = true
+			case "WARNING":
+				notifyLevels[memory.AlertLevelWarning] = true
+			case "INFO":
+				notifyLevels[memory.AlertLevelInfo] = true
+			}
+		}
+
+		// 解析收件人列表
+		var emailTo []string
+		if cfg.AlertEmailTo != "" {
+			for _, email := range strings.Split(cfg.AlertEmailTo, ",") {
+				emailTo = append(emailTo, strings.TrimSpace(email))
+			}
+		}
+
+		notifyConfig := &memory.NotifyConfig{
+			WebhookEnabled: cfg.AlertWebhookEnabled,
+			WebhookURL:     cfg.AlertWebhookURL,
+			WebhookTimeout: time.Duration(cfg.AlertWebhookTimeout) * time.Second,
+			EmailEnabled:   cfg.AlertEmailEnabled,
+			EmailSMTPHost:  cfg.AlertEmailSMTPHost,
+			EmailSMTPPort:  cfg.AlertEmailSMTPPort,
+			EmailUsername:  cfg.AlertEmailUsername,
+			EmailPassword:  cfg.AlertEmailPassword,
+			EmailFrom:      cfg.AlertEmailFrom,
+			EmailTo:        emailTo,
+			EmailUseTLS:    cfg.AlertEmailUseTLS,
+			NotifyLevels:   notifyLevels,
+		}
+
+		notifier := memory.NewAlertNotifier(notifyConfig)
+		memoryManager.SetAlertNotifier(notifier)
+		logger.System("✅ Alert notifier initialized",
+			"webhook", cfg.AlertWebhookEnabled,
+			"email", cfg.AlertEmailEnabled)
+	}
 
 	// 4. Start Admin API
 	if authService != nil {
