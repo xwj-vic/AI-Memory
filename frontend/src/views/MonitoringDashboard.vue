@@ -112,13 +112,13 @@
     <div class="charts-grid">
       <!-- 晋升趋势图 -->
       <div class="chart-card">
-        <h3>📈 {{ $t('monitoring.promotionTrend') }}</h3>
+        <h3>📈 {{ $t('monitoring.promotionTrend') }} ({{ timeRangeLabel }})</h3>
         <canvas ref="promotionChart"></canvas>
       </div>
 
       <!-- 队列长度曲线 -->
       <div class="chart-card">
-        <h3>📊 {{ $t('monitoring.queueLengthChange') }}</h3>
+        <h3>📊 {{ $t('monitoring.queueLengthChange') }} ({{ timeRangeLabel }})</h3>
         <canvas ref="queueChart"></canvas>
       </div>
 
@@ -128,33 +128,7 @@
         <canvas ref="categoryChart"></canvas>
       </div>
 
-      <!-- 信心等级分布 -->
-      <div class="chart-card">
-        <h3>🎯 {{ $t('monitoring.confidenceDistribution') }}</h3>
-        <div class="confidence-bars">
-          <div class="conf-bar">
-            <div class="conf-label">{{ $t('monitoring.highConfidence') }}</div>
-            <div class="conf-progress high">
-              <div class="conf-fill" :style="{width: confidencePercent('high') + '%'}"></div>
-            </div>
-            <div class="conf-value">{{ metrics.high_confidence_count || 0 }}</div>
-          </div>
-          <div class="conf-bar">
-            <div class="conf-label">{{ $t('monitoring.mediumConfidence') }}</div>
-            <div class="conf-progress medium">
-              <div class="conf-fill" :style="{width: confidencePercent('medium') + '%'}"></div>
-            </div>
-            <div class="conf-value">{{ metrics.medium_confidence_count || 0 }}</div>
-          </div>
-          <div class="conf-bar">
-            <div class="conf-label">{{ $t('monitoring.lowConfidence') }}</div>
-            <div class="conf-progress low">
-              <div class="conf-fill" :style="{width: confidencePercent('low') + '%'}"></div>
-            </div>
-            <div class="conf-value">{{ metrics.low_confidence_count || 0 }}</div>
-          </div>
-        </div>
-      </div>
+
     </div>
 
     <!-- 详细统计表格 -->
@@ -201,6 +175,15 @@ export default {
     }
   },
   computed: {
+    timeRangeLabel() {
+      const map = {
+        '1h': this.$t('monitoring.lastHour'),
+        '24h': this.$t('monitoring.last24Hours'),
+        '7d': this.$t('monitoring.last7Days'),
+        '30d': this.$t('monitoring.last30Days')
+      }
+      return map[this.timeRange] || this.timeRange
+    },
     totalConfidence() {
       return (this.metrics.high_confidence_count || 0) + 
              (this.metrics.medium_confidence_count || 0) + 
@@ -229,7 +212,7 @@ export default {
   methods: {
     async loadMetrics() {
       try {
-        const res = await fetch('/api/dashboard/metrics')
+        const res = await fetch(`/api/dashboard/metrics?range=${this.timeRange}`)
         this.metrics = await res.json()
         this.renderCharts()
       } catch (error) {

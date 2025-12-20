@@ -15,6 +15,7 @@ type MetricsPersistence struct {
 	persistInterval   time.Duration
 	stopChan          chan struct{}
 	lastPersistedTime time.Time
+	lastQueueLength   float64 // 上次写入的队列长度（只在变化时写入）
 }
 
 // NewMetricsPersistence 创建持久化实例
@@ -23,6 +24,7 @@ func NewMetricsPersistence(db *sql.DB, persistIntervalMinutes int) *MetricsPersi
 		db:              db,
 		persistInterval: time.Duration(persistIntervalMinutes) * time.Minute,
 		stopChan:        make(chan struct{}),
+		lastQueueLength: -1, // 初始化为-1确保首次一定写入
 	}
 }
 
@@ -121,11 +123,15 @@ func (mp *MetricsPersistence) insertTimeSeriesData(ctx context.Context, collecto
 		}
 	}
 
-	// 插入队列长度历史
+	// 插入队列长度历史（只在值变化时写入，减少数据量）
 	for _, point := range collector.QueueLengthHistory {
 		if point.Timestamp.After(mp.lastPersistedTime) {
-			if _, err := stmt.ExecContext(ctx, "queue_length", point.Value, nil, point.Timestamp); err != nil {
-				logger.Error("Failed to insert queue_length metric", err)
+			// 只在队列长度变化时才写入数据库
+			if point.Value != mp.lastQueueLength {
+				if _, err := stmt.ExecContext(ctx, "queue_length", point.Value, nil, point.Timestamp); err != nil {
+					logger.Error("Failed to insert queue_length metric", err)
+				}
+				mp.lastQueueLength = point.Value
 			}
 			if point.Timestamp.After(maxTime) {
 				maxTime = point.Timestamp

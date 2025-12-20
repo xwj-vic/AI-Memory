@@ -46,6 +46,8 @@ func main() {
 		logger.Error("Warning: MySQL connection failed", err)
 	} else {
 		logger.System("Connected to MySQL")
+		// 设置监控指标数据库连接（供时间序列查询使用）
+		memory.SetMetricsDB(mysqlDB)
 	}
 
 	// Initialize Auth Service

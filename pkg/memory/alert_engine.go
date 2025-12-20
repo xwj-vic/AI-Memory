@@ -19,12 +19,12 @@ const (
 
 // Alert 告警事件
 type Alert struct {
-	ID        string
-	Level     AlertLevel
-	Rule      string
-	Message   string
-	Timestamp time.Time
-	Metadata  map[string]interface{}
+	ID        string                 `json:"id"`
+	Level     AlertLevel             `json:"level"`
+	Rule      string                 `json:"rule"`
+	Message   string                 `json:"message"`
+	Timestamp time.Time              `json:"timestamp"`
+	Metadata  map[string]interface{} `json:"metadata"`
 }
 
 // AlertRule 告警规则
