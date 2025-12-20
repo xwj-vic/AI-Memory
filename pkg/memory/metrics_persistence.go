@@ -270,3 +270,56 @@ func (mp *MetricsPersistence) LoadRecentTimeSeries(ctx context.Context, collecto
 
 	return nil
 }
+
+// CleanupOldData 清理超过 retentionDays 天的历史数据
+func (mp *MetricsPersistence) CleanupOldData(ctx context.Context, retentionDays int) error {
+	mp.mu.Lock()
+	defer mp.mu.Unlock()
+
+	query := `DELETE FROM metrics_timeseries WHERE timestamp < DATE_SUB(NOW(), INTERVAL ? DAY)`
+	result, err := mp.db.ExecContext(ctx, query, retentionDays)
+	if err != nil {
+		return err
+	}
+
+	rowsDeleted, _ := result.RowsAffected()
+	if rowsDeleted > 0 {
+		logger.System("✅ 监控数据清理完成", "deleted_rows", rowsDeleted, "retention_days", retentionDays)
+	}
+
+	return nil
+}
+
+// StartWithCleanup 启动定时持久化和清理任务
+func (mp *MetricsPersistence) StartWithCleanup(collector *MetricsCollector, retentionDays int) {
+	// 启动原有的持久化定时器
+	persistTicker := time.NewTicker(mp.persistInterval)
+
+	// 启动每日清理定时器（每24小时执行一次）
+	cleanupTicker := time.NewTicker(24 * time.Hour)
+
+	go func() {
+		// 启动时立即执行一次清理
+		if err := mp.CleanupOldData(context.Background(), retentionDays); err != nil {
+			logger.Error("启动时清理历史数据失败", err)
+		}
+
+		for {
+			select {
+			case <-persistTicker.C:
+				mp.persistMetrics(collector)
+			case <-cleanupTicker.C:
+				if err := mp.CleanupOldData(context.Background(), retentionDays); err != nil {
+					logger.Error("定时清理历史数据失败", err)
+				}
+			case <-mp.stopChan:
+				persistTicker.Stop()
+				cleanupTicker.Stop()
+				logger.System("Metrics persistence stopped")
+				return
+			}
+		}
+	}()
+
+	logger.System("✅ Metrics persistence started (with cleanup)", "persist_interval", mp.persistInterval, "retention_days", retentionDays)
+}

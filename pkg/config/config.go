@@ -63,6 +63,7 @@ type Config struct {
 	MetricsPersistIntervalMinutes int // 指标持久化频率(分钟)
 	MetricsHistoryLoadHours       int // 启动时加载历史数据范围(小时)
 	MetricsMemoryRetentionHours   int // 内存中保留数据时长(小时)
+	MetricsRetentionDays          int // 数据库中保留历史数据天数
 
 	// 告警引擎配置
 	AlertCheckIntervalMinutes        int     // 告警检查频率(分钟)
@@ -121,6 +122,7 @@ func Load() (*Config, error) {
 	metricsPersistInterval, _ := strconv.Atoi(getEnv("METRICS_PERSIST_INTERVAL_MINUTES", "1"))
 	metricsHistoryLoadHours, _ := strconv.Atoi(getEnv("METRICS_HISTORY_LOAD_HOURS", "24"))
 	metricsMemoryRetentionHours, _ := strconv.Atoi(getEnv("METRICS_MEMORY_RETENTION_HOURS", "1"))
+	metricsRetentionDays, _ := strconv.Atoi(getEnv("METRICS_RETENTION_DAYS", "30"))
 
 	alertCheckInterval, _ := strconv.Atoi(getEnv("ALERT_CHECK_INTERVAL_MINUTES", "1"))
 	alertQueueThreshold, _ := strconv.Atoi(getEnv("ALERT_QUEUE_BACKLOG_THRESHOLD", "100"))
@@ -181,6 +183,7 @@ func Load() (*Config, error) {
 		MetricsPersistIntervalMinutes:    metricsPersistInterval,
 		MetricsHistoryLoadHours:          metricsHistoryLoadHours,
 		MetricsMemoryRetentionHours:      metricsMemoryRetentionHours,
+		MetricsRetentionDays:             metricsRetentionDays,
 		AlertCheckIntervalMinutes:        alertCheckInterval,
 		AlertQueueBacklogThreshold:       alertQueueThreshold,
 		AlertQueueBacklogCooldownMinutes: alertQueueCooldown,

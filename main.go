@@ -130,8 +130,8 @@ func main() {
 			logger.Error("Failed to load timeseries data", err)
 		}
 
-		// 启动定时持久化任务
-		metricsPersistence.Start(memory.GetGlobalMetrics())
+		// 启动定时持久化任务（含自动清理）
+		metricsPersistence.StartWithCleanup(memory.GetGlobalMetrics(), cfg.MetricsRetentionDays)
 		defer metricsPersistence.Stop()
 	}
 
