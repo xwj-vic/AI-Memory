@@ -44,6 +44,9 @@ func (pm *PerformanceMonitor) GetJudgeResultFromCache(content string) (*types.Ju
 		pm.mu.RUnlock()
 		pm.mu.Lock()
 		pm.JudgmentCacheMisses++
+		GetGlobalMetrics().mu.Lock()
+		GetGlobalMetrics().CacheMisses++
+		GetGlobalMetrics().mu.Unlock()
 		pm.mu.Unlock()
 		pm.mu.RLock()
 		return nil, false
@@ -56,6 +59,9 @@ func (pm *PerformanceMonitor) GetJudgeResultFromCache(content string) (*types.Ju
 		delete(pm.judgeCache, content)
 		delete(pm.cacheTimestamps, content)
 		pm.JudgmentCacheMisses++
+		GetGlobalMetrics().mu.Lock()
+		GetGlobalMetrics().CacheMisses++
+		GetGlobalMetrics().mu.Unlock()
 		pm.mu.Unlock()
 		pm.mu.RLock()
 		return nil, false
@@ -64,6 +70,9 @@ func (pm *PerformanceMonitor) GetJudgeResultFromCache(content string) (*types.Ju
 	pm.mu.RUnlock()
 	pm.mu.Lock()
 	pm.JudgmentCacheHits++
+	GetGlobalMetrics().mu.Lock()
+	GetGlobalMetrics().CacheHits++
+	GetGlobalMetrics().mu.Unlock()
 	pm.mu.Unlock()
 	pm.mu.RLock()
 
@@ -141,8 +150,8 @@ func (pm *PerformanceMonitor) GetMetrics() map[string]interface{} {
 
 // 在Manager结构中添加监控器
 func (m *Manager) initPerformanceMonitor() {
-	if m.cfg != nil {
-		// 监控器初始化逻辑
+	if m.monitor == nil {
+		m.monitor = NewPerformanceMonitor()
 	}
 }
 

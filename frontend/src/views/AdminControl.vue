@@ -1,6 +1,6 @@
 <template>
   <div class="admin-control">
-    <el-page-header>
+    <el-page-header :icon="null">
       <template #content>
         <span class="page-title">{{ $t('control.title') }}</span>
       </template>

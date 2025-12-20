@@ -107,15 +107,21 @@ func (mc *MetricsCollector) UpdateCategoryDistribution(categories map[string]int
 // trimHistory 保留指定时间范围内的数据
 func (mc *MetricsCollector) trimHistory(history *[]TimeSeriesPoint, duration time.Duration) {
 	cutoff := time.Now().Add(-duration)
-	newHistory := make([]TimeSeriesPoint, 0, len(*history))
 
-	for _, point := range *history {
+	// 找到第一个满足条件的索引
+	startIdx := -1
+	for i, point := range *history {
 		if point.Timestamp.After(cutoff) {
-			newHistory = append(newHistory, point)
+			startIdx = i
+			break
 		}
 	}
 
-	*history = newHistory
+	if startIdx == -1 {
+		*history = make([]TimeSeriesPoint, 0, 144)
+	} else if startIdx > 0 {
+		*history = (*history)[startIdx:]
+	}
 }
 
 // GetDashboardMetrics 获取Dashboard所需的所有指标
@@ -148,6 +154,14 @@ func (m *Manager) GetDashboardMetrics(ctx context.Context) map[string]interface{
 		}
 	}
 
+	// 【修复】合并历史晋升数据的分类统计（解决队列为空时分布图也为空的问题）
+	// 注意：这里只统计最近24小时内的分布趋势
+	for _, point := range globalMetrics.PromotionHistory {
+		if point.Label != "" {
+			categoryMap[point.Label]++
+		}
+	}
+
 	// 更新分类分布
 	go globalMetrics.UpdateCategoryDistribution(categoryMap)
 
@@ -166,8 +180,8 @@ func (m *Manager) GetDashboardMetrics(ctx context.Context) map[string]interface{
 	}
 
 	// 聚合晋升趋势（每小时）
-	promotionTrend := aggregateByHour(globalMetrics.PromotionHistory)
-	queueTrend := aggregateByHour(globalMetrics.QueueLengthHistory)
+	promotionTrend := aggregateByHour(globalMetrics.PromotionHistory, false)
+	queueTrend := aggregateByHour(globalMetrics.QueueLengthHistory, true)
 
 	return map[string]interface{}{
 		// 实时统计
@@ -200,29 +214,49 @@ func (m *Manager) GetDashboardMetrics(ctx context.Context) map[string]interface{
 	}
 }
 
-// aggregateByHour 将时间序列数据按小时聚合
-func aggregateByHour(points []TimeSeriesPoint) []TimeSeriesPoint {
+// aggregateByHour 将时间序列数据按小时聚合（返回最近24个点）
+// isAverage: true则计算平均值（如队列长度），false则计算累计值（如晋升数）
+func aggregateByHour(points []TimeSeriesPoint, isAverage bool) []TimeSeriesPoint {
 	if len(points) == 0 {
 		return []TimeSeriesPoint{}
 	}
 
-	hourly := make(map[string]float64)
-	counts := make(map[string]int)
+	hourlyProgress := make(map[string]float64)
+	hourlyCount := make(map[string]int)
+
+	// 计算当前小时及其之前的23小时
+	now := time.Now()
+	for i := 0; i < 24; i++ {
+		t := now.Add(-time.Duration(i) * time.Hour)
+		key := t.Format("2006-01-02 15:00")
+		hourlyProgress[key] = 0
+		hourlyCount[key] = 0
+	}
 
 	for _, point := range points {
 		hourKey := point.Timestamp.Format("2006-01-02 15:00")
-		hourly[hourKey] += point.Value
-		counts[hourKey]++
+		if _, exists := hourlyProgress[hourKey]; exists {
+			hourlyProgress[hourKey] += point.Value
+			hourlyCount[hourKey]++
+		}
 	}
 
-	result := make([]TimeSeriesPoint, 0, len(hourly))
-	for hourKey, sum := range hourly {
-		timestamp, _ := time.Parse("2006-01-02 15:00", hourKey)
-		avg := sum / float64(counts[hourKey])
+	result := make([]TimeSeriesPoint, 0, 24)
+	for i := 23; i >= 0; i-- {
+		t := now.Add(-time.Duration(i) * time.Hour)
+		key := t.Format("2006-01-02 15:00")
 
+		val := hourlyProgress[key]
+		count := hourlyCount[key]
+
+		if isAverage && count > 0 {
+			val = val / float64(count)
+		}
+
+		timestamp, _ := time.ParseInLocation("2006-01-02 15:00", key, time.Local)
 		result = append(result, TimeSeriesPoint{
 			Timestamp: timestamp,
-			Value:     avg,
+			Value:     val,
 		})
 	}
 

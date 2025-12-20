@@ -134,7 +134,7 @@ const updateMemory = async () => {
 
 <template>
   <div class="memory-explorer">
-    <el-page-header>
+    <el-page-header :icon="null">
       <template #content>
         <span class="page-title">{{ $t('memory.title') }}</span>
       </template>

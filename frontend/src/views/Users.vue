@@ -38,7 +38,7 @@ onMounted(fetchUsers)
 
 <template>
   <div class="users-page">
-    <el-page-header>
+    <el-page-header :icon="null">
       <template #content>
         <span class="page-title">{{ $t('users.title') }}</span>
       </template>

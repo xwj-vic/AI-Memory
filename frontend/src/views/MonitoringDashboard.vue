@@ -1,6 +1,6 @@
 <template>
   <div class="monitoring-dashboard">
-    <el-page-header>
+    <el-page-header :icon="null">
       <template #content>
         <div class="page-header-content">
           <span class="header-title">{{ $t('monitoring.title') }}</span>
@@ -112,42 +112,42 @@
     <div class="charts-grid">
       <!-- 晋升趋势图 -->
       <div class="chart-card">
-        <h3>📈 晋升趋势 (24小时)</h3>
+        <h3>📈 {{ $t('monitoring.promotionTrend') }}</h3>
         <canvas ref="promotionChart"></canvas>
       </div>
 
       <!-- 队列长度曲线 -->
       <div class="chart-card">
-        <h3>📊 队列长度变化</h3>
+        <h3>📊 {{ $t('monitoring.queueLengthChange') }}</h3>
         <canvas ref="queueChart"></canvas>
       </div>
 
       <!-- 分类分布饼图 -->
       <div class="chart-card">
-        <h3>🥧 记忆分类分布</h3>
+        <h3>🥧 {{ $t('monitoring.categoryDistribution') }}</h3>
         <canvas ref="categoryChart"></canvas>
       </div>
 
       <!-- 信心等级分布 -->
       <div class="chart-card">
-        <h3>🎯 信心等级分布</h3>
+        <h3>🎯 {{ $t('monitoring.confidenceDistribution') }}</h3>
         <div class="confidence-bars">
           <div class="conf-bar">
-            <div class="conf-label">高信心</div>
+            <div class="conf-label">{{ $t('monitoring.highConfidence') }}</div>
             <div class="conf-progress high">
               <div class="conf-fill" :style="{width: confidencePercent('high') + '%'}"></div>
             </div>
             <div class="conf-value">{{ metrics.high_confidence_count || 0 }}</div>
           </div>
           <div class="conf-bar">
-            <div class="conf-label">中信心</div>
+            <div class="conf-label">{{ $t('monitoring.mediumConfidence') }}</div>
             <div class="conf-progress medium">
               <div class="conf-fill" :style="{width: confidencePercent('medium') + '%'}"></div>
             </div>
             <div class="conf-value">{{ metrics.medium_confidence_count || 0 }}</div>
           </div>
           <div class="conf-bar">
-            <div class="conf-label">低信心</div>
+            <div class="conf-label">{{ $t('monitoring.lowConfidence') }}</div>
             <div class="conf-progress low">
               <div class="conf-fill" :style="{width: confidencePercent('low') + '%'}"></div>
             </div>
@@ -159,24 +159,24 @@
 
     <!-- 详细统计表格 -->
     <div class="details-section">
-      <h3>📋 详细统计</h3>
+      <h3>📋 {{ $t('monitoring.detailedStats') }}</h3>
       <table class="metrics-table">
         <tr>
-          <td>总晋升次数</td>
+          <td>{{ $t('monitoring.totalPromotions') }}</td>
           <td class="value">{{ metrics.total_promotions || 0 }}</td>
-          <td>总拒绝次数</td>
+          <td>{{ $t('monitoring.totalRejections') }}</td>
           <td class="value">{{ metrics.total_rejections || 0 }}</td>
         </tr>
         <tr>
-          <td>总遗忘数量</td>
+          <td>{{ $t('monitoring.totalForgotten') }}</td>
           <td class="value">{{ metrics.total_forgotten || 0 }}</td>
-          <td>当前队列</td>
+          <td>{{ $t('monitoring.currentQueue') }}</td>
           <td class="value">{{ metrics.current_queue_length || 0 }}</td>
         </tr>
         <tr>
-          <td>缓存命中</td>
+          <td>{{ $t('monitoring.cacheHits') }}</td>
           <td class="value">{{ metrics.cache_hits || 0 }}</td>
-          <td>缓存未命中</td>
+          <td>{{ $t('monitoring.cacheMisses') }}</td>
           <td class="value">{{ metrics.cache_misses || 0 }}</td>
         </tr>
       </table>
@@ -205,6 +205,11 @@ export default {
       return (this.metrics.high_confidence_count || 0) + 
              (this.metrics.medium_confidence_count || 0) + 
              (this.metrics.low_confidence_count || 0)
+    }
+  },
+  watch: {
+    '$i18n.locale'() {
+      this.renderCharts()
     }
   },
   mounted() {
@@ -298,9 +303,9 @@ export default {
       if (total === 0) return 0
       
       const counts = {
-        high: this.metrics.high_confidence_count || 0,
-        medium: this.metrics.medium_confidence_count || 0,
-        low: this.metrics.low_confidence_count || 0
+        high: Number(this.metrics.high_confidence_count) || 0,
+        medium: Number(this.metrics.medium_confidence_count) || 0,
+        low: Number(this.metrics.low_confidence_count) || 0
       }
       
       return (counts[level] / total * 100).toFixed(1)
@@ -325,7 +330,7 @@ export default {
         data: {
           labels: trend.map(p => new Date(p.timestamp).toLocaleTimeString('zh-CN', {hour: '2-digit', minute: '2-digit'})),
           datasets: [{
-            label: '晋升数量',
+            label: this.$t('monitoring.promotionCount'),
             data: trend.map(p => p.value),
             borderColor: '#10b981',
             backgroundColor: 'rgba(16, 185, 129, 0.1)',
@@ -360,7 +365,7 @@ export default {
         data: {
           labels: trend.map(p => new Date(p.timestamp).toLocaleTimeString('zh-CN', {hour: '2-digit', minute: '2-digit'})),
           datasets: [{
-            label: '队列长度',
+            label: this.$t('monitoring.queueLen'),
             data: trend.map(p => p.value),
             borderColor: '#3b82f6',
             backgroundColor: 'rgba(59, 130, 246, 0.1)',
@@ -391,10 +396,10 @@ export default {
       const distribution = this.metrics.category_distribution || []
       
       const categoryLabels = {
-        'fact': '事实',
-        'preference': '偏好',
-        'goal': '目标',
-        'noise': '噪音'
+        'fact': this.$t('staging.categories.fact'),
+        'preference': this.$t('staging.categories.preference'),
+        'goal': this.$t('staging.categories.goal'),
+        'noise': this.$t('staging.categories.noise')
       }
       
       this.charts.category = new Chart(ctx, {

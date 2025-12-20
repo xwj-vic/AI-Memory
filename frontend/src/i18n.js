@@ -103,7 +103,17 @@ const messages = {
             totalForgotten: '总遗忘数量',
             currentQueue: '当前队列',
             cacheHits: '缓存命中',
-            cacheMisses: '缓存未命中'
+            cacheHits: '缓存命中',
+            cacheMisses: '缓存未命中',
+            promotionTrend: '晋升趋势 (24小时)',
+            queueLengthChange: '队列长度变化',
+            categoryDistribution: '记忆分类分布',
+            confidenceDistribution: '信心等级分布',
+            promotionCount: '晋升数量',
+            queueLen: '队列长度',
+            highConfidence: '高信心',
+            mediumConfidence: '中信心',
+            lowConfidence: '低信心'
         },
         users: {
             title: '用户管理',
@@ -241,7 +251,17 @@ const messages = {
             totalForgotten: 'Total Forgotten',
             currentQueue: 'Current Queue',
             cacheHits: 'Cache Hits',
-            cacheMisses: 'Cache Misses'
+            cacheHits: 'Cache Hits',
+            cacheMisses: 'Cache Misses',
+            promotionTrend: 'Promotion Trend (24h)',
+            queueLengthChange: 'Queue Length Trend',
+            categoryDistribution: 'Category Distribution',
+            confidenceDistribution: 'Confidence Distribution',
+            promotionCount: 'Promotion Count',
+            queueLen: 'Queue Length',
+            highConfidence: 'High Confidence',
+            mediumConfidence: 'Medium Confidence',
+            lowConfidence: 'Low Confidence'
         },
         users: {
             title: 'User Management',

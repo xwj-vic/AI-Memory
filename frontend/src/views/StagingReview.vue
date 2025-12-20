@@ -1,6 +1,6 @@
 <template>
   <div class="staging-review">
-    <el-page-header>
+    <el-page-header :icon="null">
       <template #content>
         <span class="page-title">{{ $t('staging.title') }}</span>
       </template>

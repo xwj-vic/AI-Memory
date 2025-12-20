@@ -60,6 +60,14 @@ echo "提示: 若要仅启动前端开发服务器，使用: ./start.sh --fronte
 echo ""
 
 # 启动后端
+echo "Compiling Backend..."
+go build -o ai-memory
+if [ $? -ne 0 ]; then
+    echo "❌ Compilation failed, aborting startup."
+    exit 1
+fi
+echo "✅ Compilation successful."
+
 ./ai-memory
 
 # 如果想后台运行，使用：
