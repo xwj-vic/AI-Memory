@@ -42,7 +42,9 @@ const messages = {
             view: '查看',
             trigger: '触发',
             logout: '退出登录',
-            loggedInAs: '已登录为'
+            loggedInAs: '已登录为',
+            time: '时间',
+            actions: '操作'
         },
         login: {
             title: 'AI Memory',
@@ -208,7 +210,9 @@ const messages = {
             view: 'View',
             trigger: 'Trigger',
             logout: 'Logout',
-            loggedInAs: 'Logged in as'
+            loggedInAs: 'Logged in as',
+            time: 'Time',
+            actions: 'Actions'
         },
         login: {
             title: 'AI Memory',
