@@ -4,6 +4,7 @@ import (
 	"ai-memory/pkg/logger"
 	"ai-memory/pkg/store"
 	"context"
+	"encoding/json"
 	"sync"
 	"time"
 )
@@ -79,6 +80,9 @@ func NewAlertEngine(collector *MetricsCollector, stagingStore *store.StagingStor
 
 	// 注册默认规则（使用配置参数）
 	engine.registerDefaultRules(config)
+
+	// 初始化数据库表
+	engine.initAlertsTable()
 
 	return engine
 }
@@ -199,6 +203,16 @@ func (ae *AlertEngine) fireAlert(alert *Alert) {
 		"rule", alert.Rule,
 		"message", alert.Message)
 
+	// 持久化到数据库
+	if metricsDB != nil {
+		metaBytes, _ := json.Marshal(alert.Metadata)
+		_, err := metricsDB.Exec("INSERT INTO alerts (id, level, rule, message, timestamp, metadata) VALUES (?, ?, ?, ?, ?, ?)",
+			alert.ID, alert.Level, alert.Rule, alert.Message, alert.Timestamp, string(metaBytes))
+		if err != nil {
+			logger.Error("Failed to persist alert", err)
+		}
+	}
+
 	// 调用通知函数
 	if ae.notifyFunc != nil {
 		ae.notifyFunc(alert)
@@ -214,6 +228,27 @@ func (ae *AlertEngine) SetNotifyFunc(f func(alert *Alert)) {
 
 // GetRecentAlerts 获取最近的告警记录
 func (ae *AlertEngine) GetRecentAlerts(limit int) []Alert {
+	// 优先查询数据库
+	if metricsDB != nil {
+		rows, err := metricsDB.Query("SELECT id, level, rule, message, timestamp, metadata FROM alerts ORDER BY timestamp DESC LIMIT ?", limit)
+		if err == nil {
+			defer rows.Close()
+			var alerts []Alert
+			for rows.Next() {
+				var a Alert
+				var metaStr string
+				if err := rows.Scan(&a.ID, &a.Level, &a.Rule, &a.Message, &a.Timestamp, &metaStr); err != nil {
+					continue
+				}
+				json.Unmarshal([]byte(metaStr), &a.Metadata)
+				alerts = append(alerts, a)
+			}
+			return alerts
+		}
+		logger.Error("Failed to query alerts from DB", err)
+	}
+
+	// 降级使用内存数据
 	ae.mu.RLock()
 	defer ae.mu.RUnlock()
 
@@ -233,6 +268,27 @@ func (ae *AlertEngine) GetRecentAlerts(limit int) []Alert {
 	}
 
 	return result
+}
+
+// initAlertsTable 初始化告警表
+func (ae *AlertEngine) initAlertsTable() {
+	if metricsDB == nil {
+		return
+	}
+	query := `
+		CREATE TABLE IF NOT EXISTS alerts (
+			id VARCHAR(64) PRIMARY KEY,
+			level VARCHAR(32),
+			rule VARCHAR(64),
+			message TEXT,
+			timestamp TIMESTAMP,
+			metadata TEXT,
+			INDEX idx_timestamp (timestamp)
+		);
+	`
+	if _, err := metricsDB.Exec(query); err != nil {
+		logger.Error("Failed to init alerts table", err)
+	}
 }
 
 // ========== 告警规则实现（使用闭包支持配置化）==========

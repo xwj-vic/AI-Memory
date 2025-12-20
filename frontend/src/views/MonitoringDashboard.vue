@@ -118,7 +118,12 @@
 
       <!-- 队列长度曲线 -->
       <div class="chart-card">
-        <h3>📊 {{ $t('monitoring.queueLengthChange') }} ({{ timeRangeLabel }})</h3>
+        <h3 class="chart-header">
+          <span>📊 {{ $t('monitoring.queueLengthChange') }} ({{ timeRangeLabel }})</span>
+          <el-tooltip :content="$t('monitoring.queueTooltip')" placement="top">
+            <el-icon class="info-icon"><InfoFilled /></el-icon>
+          </el-tooltip>
+        </h3>
         <canvas ref="queueChart"></canvas>
       </div>
 
@@ -161,9 +166,16 @@
 <script>
 import { Chart, registerables } from 'chart.js'
 Chart.register(...registerables)
+import { Refresh, Download, Warning, InfoFilled } from '@element-plus/icons-vue'
 
 export default {
   name: 'MonitoringDashboard',
+  components: {
+    Refresh,
+    Download,
+    Warning,
+    InfoFilled
+  },
   data() {
     return {
       metrics: {},
@@ -314,6 +326,13 @@ export default {
       this.renderQueueChart()
       this.renderCategoryChart()
     },
+    formatChartLabel(timestamp) {
+      const date = new Date(timestamp)
+      if (['7d', '30d'].includes(this.timeRange)) {
+        return date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' })
+      }
+      return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+    },
     renderPromotionChart() {
       const ctx = this.$refs.promotionChart?.getContext('2d')
       if (!ctx) return
@@ -327,7 +346,7 @@ export default {
       this.charts.promotion = new Chart(ctx, {
         type: 'line',
         data: {
-          labels: trend.map(p => new Date(p.timestamp).toLocaleTimeString('zh-CN', {hour: '2-digit', minute: '2-digit'})),
+          labels: trend.map(p => this.formatChartLabel(p.timestamp)),
           datasets: [{
             label: this.$t('monitoring.promotionCount'),
             data: trend.map(p => p.value),
@@ -362,7 +381,7 @@ export default {
       this.charts.queue = new Chart(ctx, {
         type: 'line',
         data: {
-          labels: trend.map(p => new Date(p.timestamp).toLocaleTimeString('zh-CN', {hour: '2-digit', minute: '2-digit'})),
+          labels: trend.map(p => this.formatChartLabel(p.timestamp)),
           datasets: [{
             label: this.$t('monitoring.queueLen'),
             data: trend.map(p => p.value),
@@ -499,6 +518,23 @@ h1 {
   margin: 0 0 1rem 0;
   color: #374151;
   font-size: 1.125rem;
+}
+
+.chart-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.info-icon {
+  font-size: 16px;
+  color: var(--el-text-color-secondary);
+  cursor: help;
+  transition: color 0.3s;
+}
+
+.info-icon:hover {
+  color: var(--el-color-primary);
 }
 
 canvas {

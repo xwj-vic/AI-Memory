@@ -50,3 +50,14 @@ CREATE TABLE IF NOT EXISTS metrics_cumulative (
 INSERT INTO metrics_cumulative (id, total_promotions, total_rejections, total_forgotten, cache_hits, cache_misses)
 VALUES (1, 0, 0, 0, 0, 0)
 ON DUPLICATE KEY UPDATE id=id;
+
+-- 8. 告警记录表
+CREATE TABLE IF NOT EXISTS alerts (
+    id VARCHAR(64) PRIMARY KEY COMMENT '告警唯一ID',
+    level VARCHAR(32) COMMENT '告警级别: INFO, WARNING, ERROR',
+    rule VARCHAR(64) COMMENT '触发规则ID',
+    message TEXT COMMENT '告警消息内容',
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '告警时间',
+    metadata TEXT COMMENT '元数据(JSON格式)',
+    INDEX idx_timestamp (timestamp)
+) COMMENT='告警历史记录';
