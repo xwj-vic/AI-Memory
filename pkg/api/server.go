@@ -55,6 +55,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/admin/trigger-judge", s.handleTriggerJudge)
 	s.mux.HandleFunc("POST /api/admin/trigger-promotion", s.handleTriggerPromotion)
 	s.mux.HandleFunc("POST /api/admin/trigger-decay", s.handleTriggerDecay)
+	s.mux.HandleFunc("POST /api/admin/trigger-dedup", s.handleTriggerDedup)
 
 	// 告警API
 	s.mux.HandleFunc("GET /api/alerts", s.handleGetAlerts)

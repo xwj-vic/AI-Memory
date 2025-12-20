@@ -140,7 +140,9 @@ const messages = {
             ltmCount: 'LTM记忆数',
             fillUserSession: '请填写 User ID 和 Session ID',
             decayConfirm: '确认执行遗忘扫描？将删除衰减分数过低的记忆。',
-            completed: '执行完成'
+            completed: '执行完成',
+            ltmDedup: 'LTM去重',
+            ltmDedupDesc: '扫描长期记忆，合并相似度过高的重复记忆（语义去重）'
         },
         status: {
             title: '系统状态',
@@ -288,7 +290,9 @@ const messages = {
             ltmCount: 'LTM Count',
             fillUserSession: 'Please fill in User ID and Session ID',
             decayConfirm: 'Confirm decay scan? Memories with low scores will be deleted.',
-            completed: 'Completed'
+            completed: 'Completed',
+            ltmDedup: 'LTM De-duplication',
+            ltmDedupDesc: 'Scan LTM and merge highly similar memories (semantic deduplication)'
         },
         status: {
             title: 'System Status',
