@@ -7,7 +7,7 @@
 
 **[中文文档](./README_CN.md)** | English
 
-![alt text](image.png)
+![alt text](image/image.png)
 
 > A biomimetic AI memory management framework that implements a human-like funnel memory system (STM → Staging → LTM), enabling AI agents to intelligently filter, retain, and recall valuable information.
 
@@ -64,6 +64,19 @@ Mimics human memory processes with three-tier filtering:
 - **Ebbinghaus Curve**: Simulates natural memory decay over time
 - **Configurable Half-Life**: Adjust decay rate based on use case
 - **Auto-Cleanup**: Removes low-value memories below threshold score
+
+### 📊 Monitoring & Dashboard
+
+Real-time visibility into the memory system's health and performance:
+
+- **Metric Tracking**: Promotion rates, queue lengths, cache hit rates
+- **Visual Trends**: 24-hour trend lines for key activities
+- **System Status**: Live component health checks (Redis, Qdrant)
+
+![Monitoring Dashboard](image/Snipaste_2025-12-20_12-23-29.png)
+![Memory Statistics](image/Snipaste_2025-12-20_12-23-39.png)
+![Staging Area Review](image/Snipaste_2025-12-20_12-23-53.png)
+![Admin Control Panel](image/Snipaste_2025-12-20_12-24-00.png)
 
 ### 🔧 Production-Ready Features
 

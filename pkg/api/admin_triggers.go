@@ -59,3 +59,16 @@ func (s *Server) handleTriggerDecay(w http.ResponseWriter, r *http.Request) {
 		"message": "遗忘扫描已触发",
 	})
 }
+
+// handleTriggerDedup 手动触发LTM去重
+func (s *Server) handleTriggerDedup(w http.ResponseWriter, r *http.Request) {
+	if err := s.memory.DeduplicateLTM(r.Context()); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]string{
+		"status":  "success",
+		"message": "LTM去重流程已触发",
+	})
+}

@@ -28,7 +28,7 @@ onMounted(fetchStatus)
 
 <template>
   <div class="status-page">
-    <el-page-header>
+    <el-page-header :icon="null">
       <template #content>
         <span class="page-title">{{ $t('status.title') }}</span>
       </template>

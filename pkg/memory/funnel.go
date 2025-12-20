@@ -63,26 +63,59 @@ func (m *Manager) JudgeAndStageFromSTM(ctx context.Context, userID, sessionID st
 		}
 
 		batch := toJudge[i:end]
-		contents := make([]string, len(batch))
-		for j, rec := range batch {
-			contents[j] = rec.Content
+		contents := make([]string, 0, len(batch))
+		results := make([]*types.JudgeResult, len(batch))
+		toLLMIndices := make([]int, 0)
+
+		// 1. 尝试从缓存获取
+		if m.monitor != nil {
+			for j, rec := range batch {
+				if cached, ok := m.monitor.GetJudgeResultFromCache(rec.Content); ok {
+					results[j] = cached
+				} else {
+					contents = append(contents, rec.Content)
+					toLLMIndices = append(toLLMIndices, j)
+				}
+			}
+		} else {
+			for _, rec := range batch {
+				contents = append(contents, rec.Content)
+			}
+			for j := 0; j < len(batch); j++ {
+				toLLMIndices = append(toLLMIndices, j)
+			}
 		}
 
-		// 调用判定模型
-		results, err := m.judge.JudgeBatch(ctx, contents)
-		if err != nil {
-			logger.Error("批量判定失败", err)
-			continue
+		// 2. 对于缓存未命中的，调用判定模型
+		if len(contents) > 0 {
+			llmResults, err := m.judge.JudgeBatch(ctx, contents)
+			if err != nil {
+				logger.Error("批量判定失败", err)
+				// 处理失败情况... (暂时跳过本批次)
+				continue
+			}
+			for k, res := range llmResults {
+				idx := toLLMIndices[k]
+				results[idx] = res
+				// 存入缓存
+				if m.monitor != nil {
+					m.monitor.SetJudgeResultCache(batch[idx].Content, res)
+				}
+			}
 		}
 
-		// 添加到Staging并标记为已判定
+		// 3. 处理最终结果（来自缓存或LLM）
 		for j, result := range results {
+			if result == nil {
+				continue
+			}
+			content := batch[j].Content
 			if result.ShouldStage && result.ValueScore >= m.cfg.StagingValueThreshold {
 				// 【优化】先总结重构，存储精炼后的内容到Staging
-				summary, err := m.judge.SummarizeAndRestructure(ctx, contents[j], result.Category)
+				summary, err := m.judge.SummarizeAndRestructure(ctx, content, result.Category)
 				if err != nil {
 					logger.Error("总结重构失败，使用原文", err)
-					summary = contents[j] // 降级：使用原始内容
+					summary = content // 降级：使用原始内容
 				}
 
 				// 存储总结后的内容（原始内容已在STM中，无需重复存储）
@@ -132,6 +165,7 @@ func (m *Manager) PromoteStagingToLTM(ctx context.Context) error {
 		} else {
 			// 低信心：直接删除
 			m.stagingStore.Delete(ctx, entry.ID)
+			GetGlobalMetrics().RecordPromotion(string(entry.Category), false)
 		}
 	}
 
@@ -210,6 +244,7 @@ func (m *Manager) promoteSingleEntry(ctx context.Context, entry *types.StagingEn
 
 		// 删除Staging条目
 		m.stagingStore.Delete(ctx, entry.ID)
+		GetGlobalMetrics().RecordPromotion(string(entry.Category), true)
 		return nil
 	}
 
@@ -269,6 +304,7 @@ createNew:
 	if err := m.stagingStore.Delete(ctx, entry.ID); err != nil {
 		logger.Error("删除暂存区条目失败", err)
 	}
+	GetGlobalMetrics().RecordPromotion(string(entry.Category), true)
 
 	logger.MemoryPromotion(string(entry.Category), confirmedBy, entry.ConfidenceScore, summary)
 	return nil

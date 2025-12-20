@@ -10,10 +10,11 @@ import (
 
 // MetricsPersistence 监控指标持久化
 type MetricsPersistence struct {
-	db              *sql.DB
-	mu              sync.RWMutex
-	persistInterval time.Duration
-	stopChan        chan struct{}
+	db                *sql.DB
+	mu                sync.RWMutex
+	persistInterval   time.Duration
+	stopChan          chan struct{}
+	lastPersistedTime time.Time
 }
 
 // NewMetricsPersistence 创建持久化实例
@@ -108,23 +109,35 @@ func (mp *MetricsPersistence) insertTimeSeriesData(ctx context.Context, collecto
 	defer stmt.Close()
 
 	// 插入晋升历史
+	maxTime := mp.lastPersistedTime
 	for _, point := range collector.PromotionHistory {
-		if _, err := stmt.ExecContext(ctx, "promotion", point.Value, point.Label, point.Timestamp); err != nil {
-			logger.Error("Failed to insert promotion metric", err)
+		if point.Timestamp.After(mp.lastPersistedTime) {
+			if _, err := stmt.ExecContext(ctx, "promotion", point.Value, point.Label, point.Timestamp); err != nil {
+				logger.Error("Failed to insert promotion metric", err)
+			}
+			if point.Timestamp.After(maxTime) {
+				maxTime = point.Timestamp
+			}
 		}
 	}
 
 	// 插入队列长度历史
 	for _, point := range collector.QueueLengthHistory {
-		if _, err := stmt.ExecContext(ctx, "queue_length", point.Value, nil, point.Timestamp); err != nil {
-			logger.Error("Failed to insert queue_length metric", err)
+		if point.Timestamp.After(mp.lastPersistedTime) {
+			if _, err := stmt.ExecContext(ctx, "queue_length", point.Value, nil, point.Timestamp); err != nil {
+				logger.Error("Failed to insert queue_length metric", err)
+			}
+			if point.Timestamp.After(maxTime) {
+				maxTime = point.Timestamp
+			}
 		}
 	}
 
+	mp.lastPersistedTime = maxTime
+
 	// 清空内存中的历史数据（已持久化）
-	// 注意：这里需要小心，不要清空最近的数据
-	// 只清空1小时前的数据
-	cutoff := time.Now().Add(-time.Hour)
+	// 注意：为了保证前端图表连续性，保留最近2小时的数据在内存
+	cutoff := time.Now().Add(-2 * time.Hour)
 	collector.PromotionHistory = filterRecentPoints(collector.PromotionHistory, cutoff)
 	collector.QueueLengthHistory = filterRecentPoints(collector.QueueLengthHistory, cutoff)
 
@@ -240,6 +253,20 @@ func (mp *MetricsPersistence) LoadRecentTimeSeries(ctx context.Context, collecto
 		"promotions", len(collector.PromotionHistory),
 		"queue_points", len(collector.QueueLengthHistory),
 		"hours", hours)
+
+	// 更新最后持久化时间，避免重启后通过 LoadRecentTimeSeries 加载的数据被重复持久化
+	maxTime := time.Time{}
+	for _, p := range collector.PromotionHistory {
+		if p.Timestamp.After(maxTime) {
+			maxTime = p.Timestamp
+		}
+	}
+	for _, p := range collector.QueueLengthHistory {
+		if p.Timestamp.After(maxTime) {
+			maxTime = p.Timestamp
+		}
+	}
+	mp.lastPersistedTime = maxTime
 
 	return nil
 }

@@ -229,3 +229,12 @@
   color: var(--el-text-color-secondary);
   font-size: 14px;
 }
+/* 彻底隐藏 PageHeader 的返回按钮区域 */
+.el-page-header__back {
+    display: none !important;
+}
+
+/* 调整标题左边距，因为左侧区域隐藏了 */
+.el-page-header__content {
+    margin-left: 0 !important;
+}

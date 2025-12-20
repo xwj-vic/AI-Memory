@@ -1,6 +1,6 @@
 <template>
   <div class="admin-control">
-    <el-page-header>
+    <el-page-header :icon="null">
       <template #content>
         <span class="page-title">{{ $t('control.title') }}</span>
       </template>
@@ -20,7 +20,7 @@
 
           <el-row :gutter="16" class="trigger-cards">
             <!-- STM判定 -->
-            <el-col :xs="24" :sm="12" :md="8">
+            <el-col :xs="24" :sm="12" :md="6">
               <el-card class="trigger-card" shadow="hover">
                 <div class="card-icon">🔍</div>
                 <h3>{{ $t('control.stmJudge') }}</h3>
@@ -61,7 +61,7 @@
             </el-col>
 
             <!-- Staging晋升 -->
-            <el-col :xs="24" :sm="12" :md="8">
+            <el-col :xs="24" :sm="12" :md="6">
               <el-card class="trigger-card" shadow="hover">
                 <div class="card-icon">⬆️</div>
                 <h3>{{ $t('control.stagingPromotion') }}</h3>
@@ -87,7 +87,7 @@
             </el-col>
 
             <!-- 遗忘扫描 -->
-            <el-col :xs="24" :sm="12" :md="8">
+            <el-col :xs="24" :sm="12" :md="6">
               <el-card class="trigger-card" shadow="hover">
                 <div class="card-icon">🗑️</div>
                 <h3>{{ $t('control.decayScan') }}</h3>
@@ -106,6 +106,33 @@
                   v-if="results.decay"
                   :type="results.decay.success ? 'success' : 'error'"
                   :title="results.decay.message"
+                  :closable="false"
+                  style="margin-top: 12px;"
+                />
+              </el-card>
+            </el-col>
+
+            <!-- LTM去重 (New) -->
+            <el-col :xs="24" :sm="12" :md="6">
+              <el-card class="trigger-card" shadow="hover">
+                <div class="card-icon">🧩</div>
+                <h3>{{ $t('control.ltmDedup') }}</h3>
+                <p>{{ $t('control.ltmDedupDesc') }}</p>
+                
+                <el-button
+                  type="primary"
+                  plain
+                  @click="triggerDedup"
+                  :loading="processing.dedup"
+                  style="width: 100%; margin-top: 60px;"
+                >
+                  🧹 {{ processing.dedup ? $t('common.processing') : $t('common.trigger') }}
+                </el-button>
+
+                <el-alert
+                  v-if="results.dedup"
+                  :type="results.dedup.success ? 'success' : 'error'"
+                  :title="results.dedup.message"
                   :closable="false"
                   style="margin-top: 12px;"
                 />
@@ -163,13 +190,15 @@ export default {
       processing: {
         judge: false,
         promotion: false,
-        decay: false
+        decay: false,
+        dedup: false
       },
       processingAll: false,
       results: {
         judge: null,
         promotion: null,
-        decay: null
+        decay: null,
+        dedup: null
       },
       systemStatus: {},
       refreshInterval: null
@@ -286,6 +315,34 @@ export default {
         }
       } finally {
         this.processing.decay = false
+      }
+    },
+
+    async triggerDedup() {
+      this.processing.dedup = true
+      this.results.dedup = null
+
+      try {
+        const res = await fetch('/api/admin/trigger-dedup', {
+          method: 'POST'
+        })
+
+        const data = await res.json()
+        this.results.dedup = {
+          success: res.ok,
+          message: data.message || data.error || '执行完成'
+        }
+
+        if (res.ok) {
+          setTimeout(() => this.loadSystemStatus(), 1000)
+        }
+      } catch (error) {
+        this.results.dedup = {
+          success: false,
+          message: '请求失败: ' + error.message
+        }
+      } finally {
+        this.processing.dedup = false
       }
     },
 

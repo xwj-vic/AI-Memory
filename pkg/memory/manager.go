@@ -34,9 +34,10 @@ type Manager struct {
 	alertEngine     *AlertEngine // 告警引擎
 
 	// 后台任务控制
-	ctx    context.Context
-	cancel context.CancelFunc
-	wg     sync.WaitGroup
+	ctx     context.Context
+	cancel  context.CancelFunc
+	wg      sync.WaitGroup
+	monitor *PerformanceMonitor
 }
 
 func NewManager(cfg *config.Config, vStore VectorStore, lStore ListStore, uStore EndUserStore, embedder Embedder, llmModel llm.LLM, redisStore *store.RedisStore) *Manager {
@@ -61,6 +62,8 @@ func NewManager(cfg *config.Config, vStore VectorStore, lStore ListStore, uStore
 		ctx:             ctx,
 		cancel:          cancel,
 	}
+
+	m.initPerformanceMonitor()
 
 	// 初始化告警引擎
 	alertConfig := &AlertConfig{
@@ -419,7 +422,7 @@ func (m *Manager) GetRecentAlerts(limit int) []Alert {
 func (m *Manager) SetAlertNotifier(notifier *AlertNotifier) {
 	if m.alertEngine != nil {
 		m.alertEngine.SetNotifyFunc(func(alert *Alert) {
-notifier.Notify(alert)
-})
+			notifier.Notify(alert)
+		})
 	}
 }

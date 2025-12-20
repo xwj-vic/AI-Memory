@@ -29,3 +29,5 @@ memory.json
 # log
 log/
 ai_memory.log
+ai-memory-*
+test.log

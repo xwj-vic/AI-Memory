@@ -103,7 +103,17 @@ const messages = {
             totalForgotten: '总遗忘数量',
             currentQueue: '当前队列',
             cacheHits: '缓存命中',
-            cacheMisses: '缓存未命中'
+            cacheHits: '缓存命中',
+            cacheMisses: '缓存未命中',
+            promotionTrend: '晋升趋势 (24小时)',
+            queueLengthChange: '队列长度变化',
+            categoryDistribution: '记忆分类分布',
+            confidenceDistribution: '信心等级分布',
+            promotionCount: '晋升数量',
+            queueLen: '队列长度',
+            highConfidence: '高信心',
+            mediumConfidence: '中信心',
+            lowConfidence: '低信心'
         },
         users: {
             title: '用户管理',
@@ -130,7 +140,9 @@ const messages = {
             ltmCount: 'LTM记忆数',
             fillUserSession: '请填写 User ID 和 Session ID',
             decayConfirm: '确认执行遗忘扫描？将删除衰减分数过低的记忆。',
-            completed: '执行完成'
+            completed: '执行完成',
+            ltmDedup: 'LTM去重',
+            ltmDedupDesc: '扫描长期记忆，合并相似度过高的重复记忆（语义去重）'
         },
         status: {
             title: '系统状态',
@@ -241,7 +253,17 @@ const messages = {
             totalForgotten: 'Total Forgotten',
             currentQueue: 'Current Queue',
             cacheHits: 'Cache Hits',
-            cacheMisses: 'Cache Misses'
+            cacheHits: 'Cache Hits',
+            cacheMisses: 'Cache Misses',
+            promotionTrend: 'Promotion Trend (24h)',
+            queueLengthChange: 'Queue Length Trend',
+            categoryDistribution: 'Category Distribution',
+            confidenceDistribution: 'Confidence Distribution',
+            promotionCount: 'Promotion Count',
+            queueLen: 'Queue Length',
+            highConfidence: 'High Confidence',
+            mediumConfidence: 'Medium Confidence',
+            lowConfidence: 'Low Confidence'
         },
         users: {
             title: 'User Management',
@@ -268,7 +290,9 @@ const messages = {
             ltmCount: 'LTM Count',
             fillUserSession: 'Please fill in User ID and Session ID',
             decayConfirm: 'Confirm decay scan? Memories with low scores will be deleted.',
-            completed: 'Completed'
+            completed: 'Completed',
+            ltmDedup: 'LTM De-duplication',
+            ltmDedupDesc: 'Scan LTM and merge highly similar memories (semantic deduplication)'
         },
         status: {
             title: 'System Status',
