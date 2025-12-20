@@ -256,27 +256,43 @@ export default {
       this.refreshMetrics()
     },
     exportData() {
-      // 生成CSV格式数据
-      const csvData = this.generateCSV()
-      const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' })
-      const link = document.createElement('a')
-      const url = URL.createObjectURL(blob)
-      link.setAttribute('href', url)
-      link.setAttribute('download', `metrics_${new Date().toISOString().split('T')[0]}.csv`)
-      link.style.visibility = 'hidden'
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
+      try {
+        // 生成CSV格式数据
+        const csvData = this.generateCSV()
+        // 添加 BOM (\uFEFF) 以解决 Excel 打开 UTF-8 CSV 中文乱码问题
+        const blob = new Blob(['\uFEFF' + csvData], { type: 'text/csv;charset=utf-8;' })
+        const url = URL.createObjectURL(blob)
+        
+        const link = document.createElement('a')
+        link.href = url
+        // 使用简单文件名，避免特殊字符问题
+        link.download = `metrics_${new Date().getFullYear()}${String(new Date().getMonth()+1).padStart(2,'0')}${String(new Date().getDate()).padStart(2,'0')}.csv`
+        link.style.display = 'none'
+        document.body.appendChild(link)
+        
+        link.click()
+        
+        // 延迟清理，确保浏览器有足够时间处理下载
+        setTimeout(() => {
+          document.body.removeChild(link)
+          URL.revokeObjectURL(url)
+        }, 100)
+        
+        this.$message.success(this.$t('common.success'))
+      } catch (e) {
+        console.error('Export failed:', e)
+        this.$message.error(this.$t('common.error'))
+      }
     },
     generateCSV() {
-      const headers = '指标名称,数值,时间'
+      const headers = `${this.$t('monitoring.label')},${this.$t('monitoring.value')},${this.$t('monitoring.time')}`
       const rows = [
-        `总晋升数,${this.metrics.total_promotions || 0},${new Date().toISOString()}`,
-        `总拒绝数,${this.metrics.total_rejections || 0},${new Date().toISOString()}`,
-        `总遗忘数,${this.metrics.total_forgotten || 0},${new Date().toISOString()}`,
-        `当前队列,${this.metrics.current_queue_length || 0},${new Date().toISOString()}`,
-        `晋升成功率(%),${(this.metrics.promotion_success_rate || 0).toFixed(2)},${new Date().toISOString()}`,
-        `缓存命中率(%),${(this.metrics.cache_hit_rate || 0).toFixed(2)},${new Date().toISOString()}`
+        `${this.$t('monitoring.totalPromotions')},${this.metrics.total_promotions || 0},${new Date().toISOString()}`,
+        `${this.$t('monitoring.totalRejections')},${this.metrics.total_rejections || 0},${new Date().toISOString()}`,
+        `${this.$t('monitoring.totalForgotten')},${this.metrics.total_forgotten || 0},${new Date().toISOString()}`,
+        `${this.$t('monitoring.currentQueue')},${this.metrics.current_queue_length || 0},${new Date().toISOString()}`,
+        `${this.$t('monitoring.successRate')}(%),${(this.metrics.promotion_success_rate || 0).toFixed(2)},${new Date().toISOString()}`,
+        `${this.$t('monitoring.cacheHitRate')}(%),${(this.metrics.cache_hit_rate || 0).toFixed(2)},${new Date().toISOString()}`
       ]
       return [headers, ...rows].join('\n')
     },

@@ -113,7 +113,10 @@ const messages = {
             queueLen: '队列长度',
             highConfidence: '高信心',
             mediumConfidence: '中信心',
-            lowConfidence: '低信心'
+            lowConfidence: '低信心',
+            label: '指标名称',
+            value: '数值',
+            time: '时间'
         },
         users: {
             title: '用户管理',
@@ -263,7 +266,10 @@ const messages = {
             queueLen: 'Queue Length',
             highConfidence: 'High Confidence',
             mediumConfidence: 'Medium Confidence',
-            lowConfidence: 'Low Confidence'
+            lowConfidence: 'Low Confidence',
+            label: 'Metric',
+            value: 'Value',
+            time: 'Time'
         },
         users: {
             title: 'User Management',
