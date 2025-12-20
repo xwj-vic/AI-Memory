@@ -127,6 +127,37 @@ go build -o ai-memory
 - 用户名：`admin`
 - 密码：`admin123`
 
+### 🐳 Docker 部署（推荐）
+
+使用 Docker Compose 一键部署：
+
+```bash
+# 克隆仓库
+git clone https://github.com/xwj-vic/AI-Memory.git
+cd AI-Memory
+
+# 配置 OpenAI API 密钥
+cp docker/.env.docker docker/.env
+# 编辑 docker/.env 填入 OPENAI_API_KEY
+
+# 启动所有服务
+cd docker && docker-compose up -d
+
+# 查看日志
+docker-compose logs -f app
+```
+
+这将启动：
+- **AI-Memory 应用** 端口 `8080`
+- **Redis** 短期记忆存储
+- **MySQL** 元数据和监控
+- **Qdrant** 向量搜索
+
+停止所有服务：
+```bash
+docker-compose down
+```
+
 ---
 
 ## 📖 架构概览

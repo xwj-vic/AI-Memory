@@ -127,6 +127,37 @@ The server will start on `http://localhost:8080`
 - Username: `admin`
 - Password: `admin123`
 
+### 🐳 Docker Deployment (Recommended)
+
+One-command deployment with Docker Compose:
+
+```bash
+# Clone the repository
+git clone https://github.com/xwj-vic/AI-Memory.git
+cd AI-Memory
+
+# Configure your OpenAI API key
+cp docker/.env.docker docker/.env
+# Edit docker/.env and set OPENAI_API_KEY
+
+# Start all services
+cd docker && docker-compose up -d
+
+# View logs
+docker-compose logs -f app
+```
+
+This will start:
+- **AI-Memory App** on port `8080`
+- **Redis** for short-term memory
+- **MySQL** for metadata and metrics
+- **Qdrant** for vector search
+
+To stop all services:
+```bash
+docker-compose down
+```
+
 ---
 
 ## 📖 Architecture Overview
