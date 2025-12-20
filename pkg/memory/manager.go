@@ -418,6 +418,30 @@ func (m *Manager) GetRecentAlerts(limit int) []Alert {
 	return m.alertEngine.GetRecentAlerts(limit)
 }
 
+// QueryAlerts 查询告警
+func (m *Manager) QueryAlerts(level, rule string, limit, offset int) ([]Alert, int, error) {
+	if m.alertEngine == nil {
+		return nil, 0, fmt.Errorf("alert engine not initialized")
+	}
+	return m.alertEngine.QueryAlerts(level, rule, limit, offset)
+}
+
+// DeleteAlert 删除告警
+func (m *Manager) DeleteAlert(id string) error {
+	if m.alertEngine == nil {
+		return fmt.Errorf("alert engine not initialized")
+	}
+	return m.alertEngine.DeleteAlert(id)
+}
+
+// CreateAlert 创建告警
+func (m *Manager) CreateAlert(alert Alert) error {
+	if m.alertEngine == nil {
+		return fmt.Errorf("alert engine not initialized")
+	}
+	return m.alertEngine.CreateAlert(alert)
+}
+
 // SetAlertNotifier 设置告警通知器
 func (m *Manager) SetAlertNotifier(notifier *AlertNotifier) {
 	if m.alertEngine != nil {

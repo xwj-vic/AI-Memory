@@ -37,34 +37,7 @@
       </template>
     </el-page-header>
 
-    <!-- 告警面板 -->
-    <el-card v-if="recentAlerts.length > 0" class="alerts-card" shadow="hover">
-      <template #header>
-        <div class="card-header">
-          <el-icon><Warning /></el-icon>
-          <span>{{ $t('monitoring.recentAlerts') }}</span>
-        </div>
-      </template>
-      <el-timeline>
-        <el-timeline-item 
-          v-for="alert in recentAlerts" 
-          :key="alert.id"
-          :type="alert.level === 'ERROR' ? 'danger' : alert.level === 'WARNING' ? 'warning' : 'info'"
-          :timestamp="formatTime(alert.timestamp)"
-          placement="top"
-        >
-          <el-tag :type="alert.level === 'ERROR' ? 'danger' : alert.level === 'WARNING' ? 'warning' : 'info'" size="small">
-            {{ alert.level }}
-          </el-tag>
-          <p style="margin: 8px 0;">{{ alert.message }}</p>
-          <el-descriptions v-if="alert.metadata" :column="2" size="small" border>
-            <el-descriptions-item v-for="(value, key) in alert.metadata" :key="key" :label="key">
-              {{ value }}
-            </el-descriptions-item>
-          </el-descriptions>
-        </el-timeline-item>
-      </el-timeline>
-    </el-card>
+    <!-- 告警面板 (已移除，迁移至告警中心) -->
 
     <el-row :gutter="20" class="metrics-row">
       <el-col :xs="12" :sm="12" :md="6">
@@ -99,7 +72,19 @@
       
       <el-col :xs="12" :sm="12" :md="6">
         <el-card shadow="hover" class="stat-card">
-          <el-statistic :title="$t('monitoring.cacheHitRate')" :value="(metrics.cache_hit_rate || 0).toFixed(1)" suffix="%">
+          <el-statistic :value="(metrics.cache_hit_rate || 0).toFixed(1)" suffix="%">
+            <template #title>
+              <div style="display: inline-flex; align-items: center">
+                {{ $t('monitoring.cacheHitRate') }}
+                <el-tooltip
+                  effect="dark"
+                  :content="$t('monitoring.cacheHitRateTooltip')"
+                  placement="top"
+                >
+                  <el-icon style="margin-left: 4px; cursor: help"><InfoFilled /></el-icon>
+                </el-tooltip>
+              </div>
+            </template>
             <template #prefix>
               <el-icon color="#F56C6C"><Coin /></el-icon>
             </template>
@@ -181,7 +166,7 @@ export default {
       metrics: {},
       charts: {},
       refreshInterval: null,
-      recentAlerts: [],
+      refreshInterval: null,
       timeRange: '24h',
       loading: false
     }
@@ -209,10 +194,9 @@ export default {
   },
   mounted() {
     this.loadMetrics()
-    this.loadAlerts()
+    this.loadMetrics()
     this.refreshInterval = setInterval(() => {
       this.loadMetrics()
-      this.loadAlerts()
     }, 10000) // 每10秒刷新
   },
   beforeUnmount() {
@@ -231,18 +215,10 @@ export default {
         console.error('加载监控数据失败:', error)
       }
     },
-    async loadAlerts() {
-      try {
-        const res = await fetch('/api/alerts?limit=5')
-        const data = await res.json()
-        this.recentAlerts = data.alerts || []
-      } catch (error) {
-        console.error('加载告警数据失败:', error)
-      }
-    },
+
     async refreshMetrics() {
       this.loading = true
-      await Promise.all([this.loadMetrics(), this.loadAlerts()])
+      await Promise.all([this.loadMetrics()])
       this.loading = false
     },
     onTimeRangeChange() {

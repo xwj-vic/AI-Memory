@@ -22,6 +22,7 @@ const logout = () => {
             <router-link to="/admin/memory" class="nav-item">📚 {{ $t('nav.memory') }}</router-link>
             <router-link to="/admin/staging" class="nav-item">🔍 {{ $t('nav.staging') }}</router-link>
             <router-link to="/admin/monitoring" class="nav-item">📊 {{ $t('nav.monitoring') }}</router-link>
+            <router-link to="/admin/alerts" class="nav-item">🔔 {{ $t('nav.alerts') }}</router-link>
             <router-link to="/admin/control" class="nav-item">🎛️ {{ $t('nav.control') }}</router-link>
             <router-link to="/admin/users" class="nav-item">👥 {{ $t('nav.users') }}</router-link>
             <router-link to="/admin/status" class="nav-item">⚡ {{ $t('nav.status') }}</router-link>

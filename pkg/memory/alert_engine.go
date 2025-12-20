@@ -5,6 +5,7 @@ import (
 	"ai-memory/pkg/store"
 	"context"
 	"encoding/json"
+	"fmt"
 	"sync"
 	"time"
 )
@@ -80,9 +81,6 @@ func NewAlertEngine(collector *MetricsCollector, stagingStore *store.StagingStor
 
 	// 注册默认规则（使用配置参数）
 	engine.registerDefaultRules(config)
-
-	// 初始化数据库表
-	engine.initAlertsTable()
 
 	return engine
 }
@@ -270,25 +268,89 @@ func (ae *AlertEngine) GetRecentAlerts(limit int) []Alert {
 	return result
 }
 
-// initAlertsTable 初始化告警表
-func (ae *AlertEngine) initAlertsTable() {
+// QueryAlerts 查询告警 (仅查数据库)
+func (ae *AlertEngine) QueryAlerts(level, rule string, limit, offset int) ([]Alert, int, error) {
 	if metricsDB == nil {
-		return
+		return nil, 0, fmt.Errorf("database not initialized")
 	}
-	query := `
-		CREATE TABLE IF NOT EXISTS alerts (
-			id VARCHAR(64) PRIMARY KEY,
-			level VARCHAR(32),
-			rule VARCHAR(64),
-			message TEXT,
-			timestamp TIMESTAMP,
-			metadata TEXT,
-			INDEX idx_timestamp (timestamp)
-		);
-	`
-	if _, err := metricsDB.Exec(query); err != nil {
-		logger.Error("Failed to init alerts table", err)
+
+	query := "SELECT id, level, rule, message, timestamp, metadata FROM alerts WHERE 1=1"
+	countQuery := "SELECT COUNT(*) FROM alerts WHERE 1=1"
+	var args []interface{}
+
+	if level != "" {
+		query += " AND level = ?"
+		countQuery += " AND level = ?"
+		args = append(args, level)
 	}
+	if rule != "" {
+		query += " AND rule = ?"
+		countQuery += " AND rule = ?"
+		args = append(args, rule)
+	}
+
+	query += " ORDER BY timestamp DESC LIMIT ? OFFSET ?"
+	// Count args duplicate
+	countArgs := make([]interface{}, len(args))
+	copy(countArgs, args)
+
+	args = append(args, limit, offset)
+
+	// Get Total
+	var total int
+	if err := metricsDB.QueryRow(countQuery, countArgs...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	// Get Data
+	rows, err := metricsDB.Query(query, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var alerts []Alert
+	for rows.Next() {
+		var a Alert
+		var metaStr string
+		if err := rows.Scan(&a.ID, &a.Level, &a.Rule, &a.Message, &a.Timestamp, &metaStr); err != nil {
+			continue
+		}
+		json.Unmarshal([]byte(metaStr), &a.Metadata)
+		alerts = append(alerts, a)
+	}
+	return alerts, total, nil
+}
+
+// DeleteAlert 删除告警
+func (ae *AlertEngine) DeleteAlert(id string) error {
+	// DB delete
+	if metricsDB != nil {
+		if _, err := metricsDB.Exec("DELETE FROM alerts WHERE id = ?", id); err != nil {
+			return err
+		}
+	}
+
+	// Memory delete
+	ae.mu.Lock()
+	defer ae.mu.Unlock()
+	newRules := make([]Alert, 0, len(ae.recentAlerts))
+	for _, a := range ae.recentAlerts {
+		if a.ID != id {
+			newRules = append(newRules, a)
+		}
+	}
+	ae.recentAlerts = newRules
+	return nil
+}
+
+// CreateAlert 手动创建告警
+func (ae *AlertEngine) CreateAlert(alert Alert) error {
+	if alert.Timestamp.IsZero() {
+		alert.Timestamp = time.Now()
+	}
+	ae.fireAlert(&alert)
+	return nil
 }
 
 // ========== 告警规则实现（使用闭包支持配置化）==========
@@ -357,7 +419,7 @@ func (ae *AlertEngine) checkCacheAnomaly(ctx context.Context, metrics *MetricsCo
 	hits := metrics.CacheHits
 	metrics.mu.RUnlock()
 
-	if totalAccess < 50 {
+	if totalAccess < 120 {
 		return nil // 样本太少
 	}
 
@@ -444,7 +506,8 @@ func (ae *AlertEngine) makeCacheAnomalyCheck(threshold float64) func(ctx context
 		hits := metrics.CacheHits
 		metrics.mu.RUnlock()
 
-		if totalAccess < 50 {
+		// 增加样本门槛，避免冷启动误报
+		if totalAccess < 120 {
 			return nil // 样本太少
 		}
 
