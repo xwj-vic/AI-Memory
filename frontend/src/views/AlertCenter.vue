@@ -194,9 +194,6 @@
             placeholder='{"threshold": 100}'
             style="font-family: monospace"
           />
-          <div style="font-size: 12px; color: #909399; margin-top: 4px">
-            {{ $t('alerts.jsonFormatHint') }}
-          </div>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -209,10 +206,13 @@
 
 <script setup>
 import { ref, onMounted, reactive, nextTick } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Delete, Plus } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 import * as echarts from 'echarts'
+
+const { t } = useI18n()
 
 const loading = ref(false)
 const alerts = ref([])
@@ -294,10 +294,11 @@ const fetchTrend = async () => {
 
 //  渲染图表
 const renderChart = () => {
-  if (!chartRef.value || !trendData.value) return
+  const chartDom = document.getElementById('trendChart')
+  if (!chartDom || !trendData.value) return
 
   if (!chartInstance) {
-    chartInstance = echarts.init(chartRef.value)
+    chartInstance = echarts.init(chartDom)
   }
 
   const option = {
@@ -311,7 +312,7 @@ const renderChart = () => {
       }
     },
     legend: {
-      data: [$t('alerts.error'), $t('alerts.warning'), $t('alerts.info')],
+      data: [t('alerts.error'), t('alerts.warning'), t('alerts.info')],
       top: 10
     },
     grid: {
@@ -339,7 +340,7 @@ const renderChart = () => {
     },
     series: [
       {
-        name: $t('alerts.error'),
+        name: t('alerts.error'),
         type: 'line',
         smooth: true,
         symbol: 'circle',
@@ -365,7 +366,7 @@ const renderChart = () => {
         itemStyle: { color: '#f56c6c' }
       },
       {
-        name: $t('alerts.warning'),
+        name: t('alerts.warning'),
         type: 'line',
         smooth: true,
         symbol: 'circle',
@@ -391,7 +392,7 @@ const renderChart = () => {
         itemStyle: { color: '#e6a23c' }
       },
       {
-        name: $t('alerts.info'),
+        name: t('alerts.info'),
         type: 'line',
         smooth: true,
         symbol: 'circle',
@@ -430,10 +431,10 @@ const toggleRule = async (ruleID, enabled) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ enabled })
     })
-    const message = enabled ? $t('alerts.ruleEnabled') : $t('alerts.ruleDisabled')
+    const message = enabled ? t('alerts.ruleEnabled') : t('alerts.ruleDisabled')
     ElMessage.success(message)
   } catch (err) {
-    ElMessage.error($t('common.error'))
+    ElMessage.error(t('common.error'))
     fetchRules() // 重新加载
   }
 }
@@ -472,14 +473,14 @@ const saveRuleConfigCombined = async () => {
       })
     })
     
-    ElMessage.success($t('alerts.saveSuccess'))
+    ElMessage.success(t('alerts.saveSuccess'))
     editDialogVisible.value = false
     fetchRules()
   } catch (err) {
     if (err.message && err.message.includes('JSON')) {
-      ElMessage.error($t('alerts.invalidJson'))
+      ElMessage.error(t('alerts.invalidJson'))
     } else {
-      ElMessage.error($t('alerts.saveFailed'))
+      ElMessage.error(t('alerts.saveFailed'))
     }
   }
 }
@@ -508,13 +509,13 @@ const fetchAlerts = async () => {
 // 删除告警
 const deleteAlert = async (id) => {
   try {
-    await ElMessageBox.confirm($t('alerts.deleteConfirm'), $t('alerts.warning'), {
-      confirmButtonText: $t('common.confirm'),
-      cancelButtonText: $t('common.cancel'),
+    await ElMessageBox.confirm(t('alerts.deleteConfirm'), t('alerts.warning'), {
+      confirmButtonText: t('common.confirm'),
+      cancelButtonText: t('common.cancel'),
       type: 'warning'
     })
     await fetch(`/api/alerts/${id}`, { method: 'DELETE' })
-    ElMessage.success($t('common.success'))
+    ElMessage.success(t('common.success'))
     fetchAlerts()
   } catch {
     // cancelled
@@ -529,12 +530,12 @@ const createAlert = async () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newAlert.value)
     })
-    ElMessage.success($t('alerts.saveSuccess'))
+    ElMessage.success(t('alerts.saveSuccess'))
     dialogVisible.value = false
     newAlert.value = { level: 'INFO', rule: 'manual', message: '' }
     fetchAlerts()
   } catch (err) {
-    ElMessage.error($t('alerts.saveFailed'))
+    ElMessage.error(t('alerts.saveFailed'))
   }
 }
 
