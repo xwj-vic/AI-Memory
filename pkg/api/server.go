@@ -62,6 +62,15 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/alerts", s.handleCreateAlert)
 	s.mux.HandleFunc("DELETE /api/alerts/{id}", s.handleDeleteAlert)
 
+	// 告警管理API（新增）
+	s.mux.HandleFunc("GET /api/alerts/rules", s.handleGetAlertRules)
+	s.mux.HandleFunc("PUT /api/alerts/rules/{id}/toggle", s.handleToggleAlertRule)
+	s.mux.HandleFunc("PUT /api/alerts/rules/{id}/config", s.handleUpdateAlertRuleConfig)
+	s.mux.HandleFunc("PUT /api/alerts/rules/{id}/config-json", s.handleUpdateAlertRuleConfigJSON)
+	s.mux.HandleFunc("GET /api/alerts/stats", s.handleGetAlertStats)
+	s.mux.HandleFunc("GET /api/alerts/trend", s.handleGetAlertTrend)
+	s.mux.HandleFunc("GET /api/alerts/aggregated", s.handleGetAggregatedAlerts)
+
 	// Static Files (Frontend) - Must be last to avoid catching API routes if not specific
 	fs := http.FileServer(http.Dir("./frontend/dist"))
 	s.mux.Handle("/", fs)

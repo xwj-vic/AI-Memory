@@ -8,6 +8,7 @@ import (
 	"ai-memory/pkg/store"
 	"ai-memory/pkg/types"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -38,9 +39,12 @@ type Manager struct {
 	cancel  context.CancelFunc
 	wg      sync.WaitGroup
 	monitor *PerformanceMonitor
+
+	// 数据库连接(供告警系统使用)
+	mysqlDB *sql.DB
 }
 
-func NewManager(cfg *config.Config, vStore VectorStore, lStore ListStore, uStore EndUserStore, embedder Embedder, llmModel llm.LLM, redisStore *store.RedisStore) *Manager {
+func NewManager(cfg *config.Config, vStore VectorStore, lStore ListStore, uStore EndUserStore, embedder Embedder, llmModel llm.LLM, redisStore *store.RedisStore, mysqlDB *sql.DB) *Manager {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// 初始化漏斗组件
@@ -61,24 +65,37 @@ func NewManager(cfg *config.Config, vStore VectorStore, lStore ListStore, uStore
 		decayCalculator: decayCalc,
 		ctx:             ctx,
 		cancel:          cancel,
+		mysqlDB:         mysqlDB,
 	}
 
 	m.initPerformanceMonitor()
 
 	// 初始化告警引擎
 	alertConfig := &AlertConfig{
-		CheckIntervalMinutes:        cfg.AlertCheckIntervalMinutes,
-		QueueBacklogThreshold:       cfg.AlertQueueBacklogThreshold,
-		QueueBacklogCooldownMinutes: cfg.AlertQueueBacklogCooldownMinutes,
-		SuccessRateThreshold:        cfg.AlertSuccessRateThreshold,
-		SuccessRateCooldownMinutes:  cfg.AlertSuccessRateCooldownMinutes,
-		CacheHitRateThreshold:       cfg.AlertCacheHitRateThreshold,
-		CacheHitRateCooldownMinutes: cfg.AlertCacheHitRateCooldownMinutes,
-		DecaySpikeThreshold:         cfg.AlertDecaySpikeThreshold,
-		DecaySpikeCooldownMinutes:   cfg.AlertDecaySpikeCooldownMinutes,
-		HistoryMaxSize:              cfg.AlertHistoryMaxSize,
+		CheckIntervalMinutes: cfg.AlertCheckIntervalMinutes,
+		HistoryMaxSize:       cfg.AlertHistoryMaxSize,
+		// 智能缓存检测配置
+		CacheWindowMinutes:  cfg.AlertCacheWindowMinutes,
+		CacheMinSamples:     cfg.AlertCacheMinSamples,
+		CacheWarnThreshold:  cfg.AlertCacheWarnThreshold,
+		CacheErrorThreshold: cfg.AlertCacheErrorThreshold,
+		CacheTrendPeriods:   cfg.AlertCacheTrendPeriods,
+		// 注意：规则阈值和冷却时间现在从数据库的 alert_rule_configs 表读取
 	}
-	m.alertEngine = NewAlertEngine(GetGlobalMetrics(), stagingStore, alertConfig)
+	// 创建告警存储层
+	var alertRepo AlertRepository
+	if mysqlDB != nil {
+		alertRepo = NewMySQLAlertRepository(mysqlDB)
+	}
+	m.alertEngine = NewAlertEngine(alertRepo, GetGlobalMetrics(), stagingStore, alertConfig)
+
+	// 初始化规则配置持久化
+	if mysqlDB != nil {
+		if err := m.alertEngine.InitWithDB(ctx, mysqlDB); err != nil {
+			logger.Error("Failed to init alert engine with DB", err)
+		}
+	}
+
 	m.alertEngine.Start(ctx)
 
 	// 启动后台协程
@@ -419,27 +436,27 @@ func (m *Manager) GetRecentAlerts(limit int) []Alert {
 }
 
 // QueryAlerts 查询告警
-func (m *Manager) QueryAlerts(level, rule string, limit, offset int) ([]Alert, int, error) {
+func (m *Manager) QueryAlerts(ctx context.Context, level, rule string, limit, offset int) ([]Alert, int, error) {
 	if m.alertEngine == nil {
 		return nil, 0, fmt.Errorf("alert engine not initialized")
 	}
-	return m.alertEngine.QueryAlerts(level, rule, limit, offset)
+	return m.alertEngine.QueryAlerts(ctx, level, rule, limit, offset)
 }
 
 // DeleteAlert 删除告警
-func (m *Manager) DeleteAlert(id string) error {
+func (m *Manager) DeleteAlert(ctx context.Context, id string) error {
 	if m.alertEngine == nil {
 		return fmt.Errorf("alert engine not initialized")
 	}
-	return m.alertEngine.DeleteAlert(id)
+	return m.alertEngine.DeleteAlert(ctx, id)
 }
 
 // CreateAlert 创建告警
-func (m *Manager) CreateAlert(alert Alert) error {
+func (m *Manager) CreateAlert(ctx context.Context, alert Alert) error {
 	if m.alertEngine == nil {
 		return fmt.Errorf("alert engine not initialized")
 	}
-	return m.alertEngine.CreateAlert(alert)
+	return m.alertEngine.CreateAlert(ctx, alert)
 }
 
 // SetAlertNotifier 设置告警通知器

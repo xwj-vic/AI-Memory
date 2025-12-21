@@ -65,17 +65,19 @@ type Config struct {
 	MetricsMemoryRetentionHours   int // 内存中保留数据时长(小时)
 	MetricsRetentionDays          int // 数据库中保留历史数据天数
 
-	// 告警引擎配置
-	AlertCheckIntervalMinutes        int     // 告警检查频率(分钟)
-	AlertQueueBacklogThreshold       int     // 队列积压告警阈值
-	AlertQueueBacklogCooldownMinutes int     // 队列告警冷却时间(分钟)
-	AlertSuccessRateThreshold        float64 // 成功率告警阈值(百分比)
-	AlertSuccessRateCooldownMinutes  int     // 成功率告警冷却时间(分钟)
-	AlertCacheHitRateThreshold       float64 // 缓存命中率告警阈值(百分比)
-	AlertCacheHitRateCooldownMinutes int     // 缓存告警冷却时间(分钟)
-	AlertDecaySpikeThreshold         int     // 衰减突增告警阈值
-	AlertDecaySpikeCooldownMinutes   int     // 衰减告警冷却时间(分钟)
-	AlertHistoryMaxSize              int     // 保留的告警历史记录数量
+	// Alert Configuration
+	AlertCheckIntervalMinutes int
+	AlertHistoryMaxSize       int
+
+	// 注意：阈值和冷却时间已迁移到数据库管理
+	// 通过 alert_rule_configs 表的 config_json 字段配置
+
+	// 智能缓存检测配置
+	AlertCacheWindowMinutes  int     // 统计窗口(分钟)
+	AlertCacheMinSamples     int     // 最小样本数
+	AlertCacheWarnThreshold  float64 // 警告阈值(百分比)
+	AlertCacheErrorThreshold float64 // 错误阈值(百分比)
+	AlertCacheTrendPeriods   int     // 趋势检测周期数
 
 	// 告警通知配置
 	AlertWebhookEnabled bool   // 是否启用Webhook通知
@@ -125,15 +127,14 @@ func Load() (*Config, error) {
 	metricsRetentionDays, _ := strconv.Atoi(getEnv("METRICS_RETENTION_DAYS", "30"))
 
 	alertCheckInterval, _ := strconv.Atoi(getEnv("ALERT_CHECK_INTERVAL_MINUTES", "1"))
-	alertQueueThreshold, _ := strconv.Atoi(getEnv("ALERT_QUEUE_BACKLOG_THRESHOLD", "100"))
-	alertQueueCooldown, _ := strconv.Atoi(getEnv("ALERT_QUEUE_BACKLOG_COOLDOWN_MINUTES", "10"))
-	alertSuccessRateThreshold, _ := strconv.ParseFloat(getEnv("ALERT_SUCCESS_RATE_THRESHOLD", "60"), 64)
-	alertSuccessRateCooldown, _ := strconv.Atoi(getEnv("ALERT_SUCCESS_RATE_COOLDOWN_MINUTES", "30"))
-	alertCacheHitRateThreshold, _ := strconv.ParseFloat(getEnv("ALERT_CACHE_HIT_RATE_THRESHOLD", "20"), 64)
-	alertCacheHitRateCooldown, _ := strconv.Atoi(getEnv("ALERT_CACHE_HIT_RATE_COOLDOWN_MINUTES", "15"))
-	alertDecaySpikeThreshold, _ := strconv.Atoi(getEnv("ALERT_DECAY_SPIKE_THRESHOLD", "1000"))
-	alertDecaySpikeCooldown, _ := strconv.Atoi(getEnv("ALERT_DECAY_SPIKE_COOLDOWN_MINUTES", "60"))
 	alertHistoryMaxSize, _ := strconv.Atoi(getEnv("ALERT_HISTORY_MAX_SIZE", "100"))
+
+	// 智能缓存检测配置
+	alertCacheWindowMinutes, _ := strconv.Atoi(getEnv("ALERT_CACHE_WINDOW_MINUTES", "5"))
+	alertCacheMinSamples, _ := strconv.Atoi(getEnv("ALERT_CACHE_MIN_SAMPLES", "500"))
+	alertCacheWarnThreshold, _ := strconv.ParseFloat(getEnv("ALERT_CACHE_WARN_THRESHOLD", "30"), 64)
+	alertCacheErrorThreshold, _ := strconv.ParseFloat(getEnv("ALERT_CACHE_ERROR_THRESHOLD", "15"), 64)
+	alertCacheTrendPeriods, _ := strconv.Atoi(getEnv("ALERT_CACHE_TREND_PERIODS", "3"))
 
 	// 告警通知配置
 	alertWebhookEnabled, _ := strconv.ParseBool(getEnv("ALERT_WEBHOOK_ENABLED", "false"))
@@ -180,20 +181,19 @@ func Load() (*Config, error) {
 		ExtractTagsModel:      getEnv("EXTRACT_TAGS_MODEL", "gpt-4o"),
 
 		// 监控系统配置
-		MetricsPersistIntervalMinutes:    metricsPersistInterval,
-		MetricsHistoryLoadHours:          metricsHistoryLoadHours,
-		MetricsMemoryRetentionHours:      metricsMemoryRetentionHours,
-		MetricsRetentionDays:             metricsRetentionDays,
-		AlertCheckIntervalMinutes:        alertCheckInterval,
-		AlertQueueBacklogThreshold:       alertQueueThreshold,
-		AlertQueueBacklogCooldownMinutes: alertQueueCooldown,
-		AlertSuccessRateThreshold:        alertSuccessRateThreshold,
-		AlertSuccessRateCooldownMinutes:  alertSuccessRateCooldown,
-		AlertCacheHitRateThreshold:       alertCacheHitRateThreshold,
-		AlertCacheHitRateCooldownMinutes: alertCacheHitRateCooldown,
-		AlertDecaySpikeThreshold:         alertDecaySpikeThreshold,
-		AlertDecaySpikeCooldownMinutes:   alertDecaySpikeCooldown,
-		AlertHistoryMaxSize:              alertHistoryMaxSize,
+		MetricsPersistIntervalMinutes: metricsPersistInterval,
+		MetricsHistoryLoadHours:       metricsHistoryLoadHours,
+		MetricsMemoryRetentionHours:   metricsMemoryRetentionHours,
+		MetricsRetentionDays:          metricsRetentionDays,
+		AlertCheckIntervalMinutes:     alertCheckInterval,
+		AlertHistoryMaxSize:           alertHistoryMaxSize,
+
+		// 智能缓存检测配置
+		AlertCacheWindowMinutes:  alertCacheWindowMinutes,
+		AlertCacheMinSamples:     alertCacheMinSamples,
+		AlertCacheWarnThreshold:  alertCacheWarnThreshold,
+		AlertCacheErrorThreshold: alertCacheErrorThreshold,
+		AlertCacheTrendPeriods:   alertCacheTrendPeriods,
 
 		// 告警通知配置
 		AlertWebhookEnabled: alertWebhookEnabled,

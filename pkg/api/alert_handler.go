@@ -32,7 +32,7 @@ func (s *Server) handleGetAlerts(w http.ResponseWriter, r *http.Request) {
 	offset := (page - 1) * limit
 
 	// Call Manager Query
-	alerts, total, err := s.memory.QueryAlerts(level, rule, limit, offset)
+	alerts, total, err := s.memory.QueryAlerts(r.Context(), level, rule, limit, offset)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to query alerts: %v", err), http.StatusInternalServerError)
 		return
@@ -54,7 +54,7 @@ func (s *Server) handleDeleteAlert(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.memory.DeleteAlert(id); err != nil {
+	if err := s.memory.DeleteAlert(r.Context(), id); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to delete alert: %v", err), http.StatusInternalServerError)
 		return
 	}
@@ -78,7 +78,7 @@ func (s *Server) handleCreateAlert(w http.ResponseWriter, r *http.Request) {
 		alert.Timestamp = time.Now()
 	}
 
-	if err := s.memory.CreateAlert(alert); err != nil {
+	if err := s.memory.CreateAlert(r.Context(), alert); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to create alert: %v", err), http.StatusInternalServerError)
 		return
 	}

@@ -20,7 +20,12 @@ const messages = {
             level: '级别',
             rule: '规则',
             message: '消息',
-            createTitle: '手动创建告警'
+            createTitle: '手动创建告警',
+            description: '说明',
+            status: '状态',
+            trigger_count: '触发次数',
+            last_triggered: '最后触发',
+            configure: '配置'
         },
         common: {
             refresh: '刷新',

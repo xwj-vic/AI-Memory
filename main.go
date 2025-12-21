@@ -54,17 +54,11 @@ func main() {
 	var authService *auth.Service
 	if mysqlDB != nil {
 		authService = auth.NewService(mysqlDB)
-		if err := authService.InitSchema(); err != nil {
-			logger.Error("Warning: Failed to init auth schema", err)
-		} else {
-			// Check if we need to seed a default admin?
-			// For now just logging.
-			logger.System("Auth Schema Initialized")
+		logger.System("Auth Schema Initialized")
 
-			// Seed Default Admin
-			if err := authService.CreateUser("admin", "admin123"); err == nil {
-				logger.System("Default Admin Created: admin / admin123")
-			}
+		// Seed Default Admin (if not exists)
+		if err := authService.CreateUser("admin", "admin123"); err == nil {
+			logger.System("Default Admin Created: admin / admin123")
 		}
 	}
 
@@ -103,18 +97,13 @@ func main() {
 	vectorStore = qs
 	logger.System("Connected to Qdrant (LTM)")
 
-	// 3. Create Manager
 	// Infrastructure for End Users (MySQL)
 	var endUserStore memory.EndUserStore
 	if mysqlDB != nil {
-		eus := store.NewMySQLEndUserStore(mysqlDB)
-		if err := eus.Init(); err != nil {
-			logger.Error("Failed to init end_users table", err)
-		}
-		endUserStore = eus
+		endUserStore = store.NewMySQLEndUserStore(mysqlDB)
 	}
 
-	memoryManager := memory.NewManager(cfg, vectorStore, redisStore, endUserStore, embedderClient, llmClient, redisStore)
+	memoryManager := memory.NewManager(cfg, vectorStore, redisStore, endUserStore, embedderClient, llmClient, redisStore, mysqlDB)
 
 	// 初始化监控指标持久化
 	if mysqlDB != nil {
