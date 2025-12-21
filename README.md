@@ -78,6 +78,29 @@ Real-time visibility into the memory system's health and performance:
 ![Staging Area Review](image/Snipaste_2025-12-20_12-23-53.png)
 ![Admin Control Panel](image/Snipaste_2025-12-20_12-24-00.png)
 
+### 🚨 Intelligent Alert System
+
+Automatically monitor memory system health and detect potential issues:
+
+- **Dynamic Rule Configuration**: Real-time adjustment of alert thresholds and cooldown periods via Web UI, no restart required
+- **Multi-Level Alerts**: Support for ERROR/WARNING/INFO severity levels
+- **Built-in Rules**:
+  - Queue backlog detection (Staging queue too long)
+  - Low promotion success rate
+  - Cache hit rate anomalies
+  - Memory decay spike detection
+- **Trend Visualization**: 24-hour alert trend charts with ECharts optimization
+- **Persistent Statistics**: Rule execution counts and notification success rates stored in database, data retained across service restarts
+
+### 🌐 Internationalization Support
+
+Comprehensive multi-language support:
+
+- **Bilingual Interface**: Chinese and English support
+- **One-Click Switching**: Quick language toggle in top navigation
+- **Complete Translation**: All pages, buttons, and messages fully translated
+- **Localized Storage**: Language preference automatically remembered
+
 ### 🔧 Production-Ready Features
 
 - **Multi-Store Coordination**: Redis (speed) + MySQL (structure) + Qdrant (semantics)
@@ -286,6 +309,8 @@ Access the web UI at `http://localhost:8080` after starting the server.
 - 🔍 Search and filter memories by type/user
 - ✏️ Edit or delete specific memories
 - 👥 User management and session tracking
+- 🚨 Alert Center: Configure alert rules, view real-time alerts and trends
+- 🌐 Multi-language Support: Switch between Chinese and English
 
 ---
 

@@ -7,7 +7,7 @@
           <div class="stat-icon error">🔴</div>
           <div class="stat-info">
             <div class="stat-value">{{ alertCounts.ERROR || 0 }}</div>
-            <div class="stat-label">错误告警</div>
+            <div class="stat-label">{{ $t('alerts.errorAlerts') }}</div>
           </div>
         </div>
       </el-card>
@@ -16,7 +16,7 @@
           <div class="stat-icon warning">🟡</div>
           <div class="stat-info">
             <div class="stat-value">{{ alertCounts.WARNING || 0 }}</div>
-            <div class="stat-label">警告告警</div>
+            <div class="stat-label">{{ $t('alerts.warningAlerts') }}</div>
           </div>
         </div>
       </el-card>
@@ -25,7 +25,7 @@
           <div class="stat-icon">📊</div>
           <div class="stat-info">
             <div class="stat-value">{{ stats.total_checks || 0 }}</div>
-            <div class="stat-label">规则执行次数</div>
+            <div class="stat-label">{{ $t('alerts.totalChecks') }}</div>
           </div>
         </div>
       </el-card>
@@ -34,7 +34,7 @@
           <div class="stat-icon success">✅</div>
           <div class="stat-info">
             <div class="stat-value">{{ (stats.notify_success_rate * 100).toFixed(1) }}%</div>
-            <div class="stat-label">通知成功率</div>
+            <div class="stat-label">{{ $t('alerts.notifySuccessRate') }}</div>
           </div>
         </div>
       </el-card>
@@ -44,20 +44,20 @@
     <el-card class="trend-card">
       <template #header>
         <div class="card-header">
-          <h3>告警趋势（最近24小时）</h3>
-          <el-button size="small" @click="fetchTrend">刷新</el-button>
+          <h3>{{ $t('alerts.trendTitle') }}</h3>
+          <el-button size="small" @click="fetchTrend">{{ $t('common.refresh') }}</el-button>
         </div>
       </template>
-      <div ref="chartRef" style="height: 300px;"></div>
+      <div id="trendChart" style="height: 350px"></div>
     </el-card>
 
     <!-- 规则管理 -->
-    <el-card class="rules-card">
+    <el-card class="table-card">
       <template #header>
-        <h3>规则管理</h3>
+        <h3>{{ $t('alerts.rulesManagement') }}</h3>
       </template>
       <el-table :data="rules" style="width: 100%">
-        <el-table-column prop="name" label="规则名称" width="200" />
+        <el-table-column prop="name" :label="$t('alerts.ruleName')" width="200" />
         <el-table-column prop="description" :label="$t('alerts.description')" min-width="180" />
         <el-table-column :label="$t('alerts.status')" width="80" align="center">
           <template #default="{ row }">
@@ -78,44 +78,43 @@
     </el-card>
 
     <!-- 实时告警列表 -->
-    <el-card>
+    <el-card class="table-card" style="margin-top: 24px">
       <template #header>
         <div class="card-header">
-          <h3>实时告警</h3>
+          <h3>{{ $t('alerts.realTimeAlerts') }}</h3>
           <div class="actions">
             <el-button type="primary" @click="dialogVisible = true">
-              <el-icon><Plus /></el-icon> 手动创建
+              <el-icon><Plus /></el-icon> {{ $t('alerts.manualCreate') }}
             </el-button>
           </div>
         </div>
       </template>
 
-      <!-- Filters -->
+      <!-- 筛选条 -->
       <div class="filters">
-        <el-select v-model="filters.level" placeholder="筛选级别" clearable style="width: 150px">
-          <el-option label="INFO" value="INFO" />
-          <el-option label="WARNING" value="WARNING" />
+        <el-select v-model="filters.level" :placeholder="$t('alerts.filterPlaceholder')" clearable style="width: 150px">
           <el-option label="ERROR" value="ERROR" />
+          <el-option label="WARNING" value="WARNING" />
+          <el-option label="INFO" value="INFO" />
         </el-select>
-        <el-input v-model="filters.rule" placeholder="筛选规则" clearable style="width: 200px" />
-        <el-button @click="fetchAlerts">搜索</el-button>
+        <el-input v-model="filters.rule" :placeholder="$t('alerts.ruleFilterPlaceholder')" clearable style="width: 200px" />
+        <el-button @click="fetchAlerts">{{ $t('common.search') }}</el-button>
       </div>
 
-      <!-- Table -->
-      <el-table :data="alerts" style="width: 100%" v-loading="loading">
-        <el-table-column prop="timestamp" label="时间" width="180">
-          <template #default="scope">
-            {{ formatTime(scope.row.timestamp) }}
+      <el-table :data="alerts" style="width: 100%; margin-top: 16px" v-loading="loading">
+        <el-table-column prop="timestamp" :label="$t('common.time')" width="180">
+          <template #default="{ row }">
+            {{ formatTime(row.timestamp) }}
           </template>
         </el-table-column>
-        <el-table-column prop="level" label="级别" width="100">
-          <template #default="scope">
-            <el-tag :type="getLevelType(scope.row.level)">{{ scope.row.level }}</el-tag>
+        <el-table-column prop="level" :label="$t('alerts.level')" width="100">
+          <template #default="{ row }">
+            <el-tag :type="getLevelType(row.level)">{{ row.level }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="rule" label="规则" width="150" />
-        <el-table-column prop="message" label="消息" />
-        <el-table-column label="操作" width="100">
+        <el-table-column prop="rule" :label="$t('alerts.rule')" width="150" />
+        <el-table-column prop="message" :label="$t('alerts.message')" />
+        <el-table-column :label="$t('common.actions')" width="100">
           <template #default="scope">
             <el-button type="danger" circle size="small" @click="deleteAlert(scope.row.id)">
               <el-icon><Delete /></el-icon>
@@ -137,56 +136,57 @@
       </div>
     </el-card>
 
-    <!-- Create Dialog -->
-    <el-dialog v-model="dialogVisible" title="手动创建告警" width="500px">
-      <el-form :model="newAlert" label-width="80px">
-        <el-form-item label="级别">
-          <el-select v-model="newAlert.level">
-            <el-option label="INFO" value="INFO" />
-            <el-option label="WARNING" value="WARNING" />
+    <!-- 手动创建对话框 -->
+    <el-dialog v-model="dialogVisible" :title="$t('alerts.createTitle')" width="500px">
+      <el-form :model="newAlert">
+        <el-form-item :label="$t('alerts.level')">
+          <el-select v-model="newAlert.level" style="width: 100%">
             <el-option label="ERROR" value="ERROR" />
+            <el-option label="WARNING" value="WARNING" />
+            <el-option label="INFO" value="INFO" />
           </el-select>
         </el-form-item>
-        <el-form-item label="规则">
+        <el-form-item :label="$t('alerts.rule')">
           <el-input v-model="newAlert.rule" />
         </el-form-item>
-        <el-form-item label="消息">
-          <el-input v-model="newAlert.message" type="textarea" />
+        <el-form-item :label="$t('alerts.message')">
+          <el-input v-model="newAlert.message" type="textarea" rows="3" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="createAlert">确认</el-button>
+        <el-button @click="dialogVisible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="createAlert">{{ $t('common.confirm') }}</el-button>
       </template>
     </el-dialog>
 
     <!-- 规则配置对话框（合并基础和高级配置） -->
-    <el-dialog v-model="editDialogVisible" title="规则配置" width="700px">
+    <el-dialog v-model="editDialogVisible" :title="$t('alerts.ruleConfigTitle')" width="700px">
       <el-form v-if="editingRule" label-width="140px">
-        <el-form-item label="规则名称">
-          <span>{{ editingRule.name }}</span>
+        <el-form-item :label="$t('alerts.ruleName')">
+          <el-input v-model="editingRule.name" disabled />
         </el-form-item>
-        <el-form-item label="规则ID">
-          <span style="color: #909399; font-size: 13px">{{ editingRule.id }}</span>
+        <el-form-item :label="$t('alerts.ruleId')">
+          <el-input v-model="editingRule.id" disabled />
         </el-form-item>
         
-        <el-divider content-position="left">基础配置</el-divider>
+        <el-divider content-position="left">{{ $t('alerts.basicConfig') }}</el-divider>
         
-        <el-form-item label="冷却时间(分钟)">
+        <el-form-item :label="$t('alerts.cooldownMinutes')">
           <el-input-number 
-            v-model="editingRule.cooldown_minutes" 
+            v-model="editingRule.cooldown" 
             :min="1" 
             :max="1440"
-            style="width: 200px"
+            :step="1"
+            style="width: 100%"
           />
-          <div style="margin-top: 8px; color: #909399; font-size: 12px">
-            规则触发后的静默时间，避免频繁告警
+          <div style="font-size: 12px; color: #909399; margin-top: 4px">
+            {{ $t('alerts.cooldownDesc') }}
           </div>
         </el-form-item>
 
-        <el-divider content-position="left">高级配置 (JSON)</el-divider>
+        <el-divider content-position="left">{{ $t('alerts.advancedConfig') }}</el-divider>
         
-        <el-form-item label="配置JSON">
+        <el-form-item :label="$t('alerts.configJson')">
           <el-input
             v-model="editingRule.config_json_text"
             type="textarea"
@@ -194,14 +194,14 @@
             placeholder='{"threshold": 100}'
             style="font-family: monospace"
           />
-          <div style="margin-top: 8px; color: #909399; font-size: 12px">
-            JSON格式，如: {"threshold": 100, "window_minutes": 5}
+          <div style="font-size: 12px; color: #909399; margin-top: 4px">
+            {{ $t('alerts.jsonFormatHint') }}
           </div>
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="editDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="saveRuleConfigCombined">保存</el-button>
+        <el-button @click="editDialogVisible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="saveRuleConfigCombined">{{ $t('common.save') }}</el-button>
       </template>
     </el-dialog>
   </div>
@@ -311,7 +311,7 @@ const renderChart = () => {
       }
     },
     legend: {
-      data: ['错误', '警告', '信息'],
+      data: [$t('alerts.error'), $t('alerts.warning'), $t('alerts.info')],
       top: 10
     },
     grid: {
@@ -339,7 +339,7 @@ const renderChart = () => {
     },
     series: [
       {
-        name: '错误',
+        name: $t('alerts.error'),
         type: 'line',
         smooth: true,
         symbol: 'circle',
@@ -365,7 +365,7 @@ const renderChart = () => {
         itemStyle: { color: '#f56c6c' }
       },
       {
-        name: '警告',
+        name: $t('alerts.warning'),
         type: 'line',
         smooth: true,
         symbol: 'circle',
@@ -391,7 +391,7 @@ const renderChart = () => {
         itemStyle: { color: '#e6a23c' }
       },
       {
-        name: '信息',
+        name: $t('alerts.info'),
         type: 'line',
         smooth: true,
         symbol: 'circle',
@@ -430,9 +430,10 @@ const toggleRule = async (ruleID, enabled) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ enabled })
     })
-    ElMessage.success(`规则已${enabled ? '启用' : '禁用'}`)
+    const message = enabled ? $t('alerts.ruleEnabled') : $t('alerts.ruleDisabled')
+    ElMessage.success(message)
   } catch (err) {
-    ElMessage.error('操作失败')
+    ElMessage.error($t('common.error'))
     fetchRules() // 重新加载
   }
 }
@@ -471,14 +472,14 @@ const saveRuleConfigCombined = async () => {
       })
     })
     
-    ElMessage.success('配置已更新')
+    ElMessage.success($t('alerts.saveSuccess'))
     editDialogVisible.value = false
     fetchRules()
   } catch (err) {
-    if (err instanceof SyntaxError) {
-      ElMessage.error('JSON格式错误，请检查')
+    if (err.message && err.message.includes('JSON')) {
+      ElMessage.error($t('alerts.invalidJson'))
     } else {
-      ElMessage.error('更新失败')
+      ElMessage.error($t('alerts.saveFailed'))
     }
   }
 }
@@ -507,13 +508,15 @@ const fetchAlerts = async () => {
 // 删除告警
 const deleteAlert = async (id) => {
   try {
-    await ElMessageBox.confirm('确定删除此告警吗?', '警告', {
+    await ElMessageBox.confirm($t('alerts.deleteConfirm'), $t('alerts.warning'), {
+      confirmButtonText: $t('common.confirm'),
+      cancelButtonText: $t('common.cancel'),
       type: 'warning'
     })
     await fetch(`/api/alerts/${id}`, { method: 'DELETE' })
-    ElMessage.success('已删除')
+    ElMessage.success($t('common.success'))
     fetchAlerts()
-  } catch (err) {
+  } catch {
     // cancelled
   }
 }
@@ -521,17 +524,17 @@ const deleteAlert = async (id) => {
 // 创建告警
 const createAlert = async () => {
   try {
-    await fetch('/api/alerts', {
+    await fetch('/api/alerts/manual', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newAlert)
+      body: JSON.stringify(newAlert.value)
     })
-    ElMessage.success('告警已创建')
+    ElMessage.success($t('alerts.saveSuccess'))
     dialogVisible.value = false
+    newAlert.value = { level: 'INFO', rule: 'manual', message: '' }
     fetchAlerts()
-    fetchStats()
   } catch (err) {
-    ElMessage.error('创建失败')
+    ElMessage.error($t('alerts.saveFailed'))
   }
 }
 
