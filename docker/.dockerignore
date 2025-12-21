@@ -1,0 +1,49 @@
+# Git
+.git
+.gitignore
+
+# Dependencies
+node_modules
+vendor
+
+# Build artifacts
+*.exe
+*.dll
+*.so
+*.dylib
+ai-memory
+
+# Test files
+*_test.go
+*.test
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# Logs
+*.log
+log/
+
+# Environment files (except template)
+.env
+!.env.example
+!.env.docker
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Frontend build (will be rebuilt in Docker)
+frontend/dist
+frontend/node_modules
+
+# Documentation
+*.md
+!README.md
+!README_CN.md
+
+# Images for documentation
+image/

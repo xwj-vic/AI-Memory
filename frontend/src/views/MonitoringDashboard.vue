@@ -37,34 +37,7 @@
       </template>
     </el-page-header>
 
-    <!-- 告警面板 -->
-    <el-card v-if="recentAlerts.length > 0" class="alerts-card" shadow="hover">
-      <template #header>
-        <div class="card-header">
-          <el-icon><Warning /></el-icon>
-          <span>{{ $t('monitoring.recentAlerts') }}</span>
-        </div>
-      </template>
-      <el-timeline>
-        <el-timeline-item 
-          v-for="alert in recentAlerts" 
-          :key="alert.id"
-          :type="alert.level === 'ERROR' ? 'danger' : alert.level === 'WARNING' ? 'warning' : 'info'"
-          :timestamp="formatTime(alert.timestamp)"
-          placement="top"
-        >
-          <el-tag :type="alert.level === 'ERROR' ? 'danger' : alert.level === 'WARNING' ? 'warning' : 'info'" size="small">
-            {{ alert.level }}
-          </el-tag>
-          <p style="margin: 8px 0;">{{ alert.message }}</p>
-          <el-descriptions v-if="alert.metadata" :column="2" size="small" border>
-            <el-descriptions-item v-for="(value, key) in alert.metadata" :key="key" :label="key">
-              {{ value }}
-            </el-descriptions-item>
-          </el-descriptions>
-        </el-timeline-item>
-      </el-timeline>
-    </el-card>
+    <!-- 告警面板 (已移除，迁移至告警中心) -->
 
     <el-row :gutter="20" class="metrics-row">
       <el-col :xs="12" :sm="12" :md="6">
@@ -99,7 +72,19 @@
       
       <el-col :xs="12" :sm="12" :md="6">
         <el-card shadow="hover" class="stat-card">
-          <el-statistic :title="$t('monitoring.cacheHitRate')" :value="(metrics.cache_hit_rate || 0).toFixed(1)" suffix="%">
+          <el-statistic :value="(metrics.cache_hit_rate || 0).toFixed(1)" suffix="%">
+            <template #title>
+              <div style="display: inline-flex; align-items: center">
+                {{ $t('monitoring.cacheHitRate') }}
+                <el-tooltip
+                  effect="dark"
+                  :content="$t('monitoring.cacheHitRateTooltip')"
+                  placement="top"
+                >
+                  <el-icon style="margin-left: 4px; cursor: help"><InfoFilled /></el-icon>
+                </el-tooltip>
+              </div>
+            </template>
             <template #prefix>
               <el-icon color="#F56C6C"><Coin /></el-icon>
             </template>
@@ -112,13 +97,18 @@
     <div class="charts-grid">
       <!-- 晋升趋势图 -->
       <div class="chart-card">
-        <h3>📈 {{ $t('monitoring.promotionTrend') }}</h3>
+        <h3>📈 {{ $t('monitoring.promotionTrend') }} ({{ timeRangeLabel }})</h3>
         <canvas ref="promotionChart"></canvas>
       </div>
 
       <!-- 队列长度曲线 -->
       <div class="chart-card">
-        <h3>📊 {{ $t('monitoring.queueLengthChange') }}</h3>
+        <h3 class="chart-header">
+          <span>📊 {{ $t('monitoring.queueLengthChange') }} ({{ timeRangeLabel }})</span>
+          <el-tooltip :content="$t('monitoring.queueTooltip')" placement="top">
+            <el-icon class="info-icon"><InfoFilled /></el-icon>
+          </el-tooltip>
+        </h3>
         <canvas ref="queueChart"></canvas>
       </div>
 
@@ -128,33 +118,7 @@
         <canvas ref="categoryChart"></canvas>
       </div>
 
-      <!-- 信心等级分布 -->
-      <div class="chart-card">
-        <h3>🎯 {{ $t('monitoring.confidenceDistribution') }}</h3>
-        <div class="confidence-bars">
-          <div class="conf-bar">
-            <div class="conf-label">{{ $t('monitoring.highConfidence') }}</div>
-            <div class="conf-progress high">
-              <div class="conf-fill" :style="{width: confidencePercent('high') + '%'}"></div>
-            </div>
-            <div class="conf-value">{{ metrics.high_confidence_count || 0 }}</div>
-          </div>
-          <div class="conf-bar">
-            <div class="conf-label">{{ $t('monitoring.mediumConfidence') }}</div>
-            <div class="conf-progress medium">
-              <div class="conf-fill" :style="{width: confidencePercent('medium') + '%'}"></div>
-            </div>
-            <div class="conf-value">{{ metrics.medium_confidence_count || 0 }}</div>
-          </div>
-          <div class="conf-bar">
-            <div class="conf-label">{{ $t('monitoring.lowConfidence') }}</div>
-            <div class="conf-progress low">
-              <div class="conf-fill" :style="{width: confidencePercent('low') + '%'}"></div>
-            </div>
-            <div class="conf-value">{{ metrics.low_confidence_count || 0 }}</div>
-          </div>
-        </div>
-      </div>
+
     </div>
 
     <!-- 详细统计表格 -->
@@ -187,20 +151,36 @@
 <script>
 import { Chart, registerables } from 'chart.js'
 Chart.register(...registerables)
+import { Refresh, Download, Warning, InfoFilled } from '@element-plus/icons-vue'
 
 export default {
   name: 'MonitoringDashboard',
+  components: {
+    Refresh,
+    Download,
+    Warning,
+    InfoFilled
+  },
   data() {
     return {
       metrics: {},
       charts: {},
       refreshInterval: null,
-      recentAlerts: [],
+      refreshInterval: null,
       timeRange: '24h',
       loading: false
     }
   },
   computed: {
+    timeRangeLabel() {
+      const map = {
+        '1h': this.$t('monitoring.lastHour'),
+        '24h': this.$t('monitoring.last24Hours'),
+        '7d': this.$t('monitoring.last7Days'),
+        '30d': this.$t('monitoring.last30Days')
+      }
+      return map[this.timeRange] || this.timeRange
+    },
     totalConfidence() {
       return (this.metrics.high_confidence_count || 0) + 
              (this.metrics.medium_confidence_count || 0) + 
@@ -214,10 +194,9 @@ export default {
   },
   mounted() {
     this.loadMetrics()
-    this.loadAlerts()
+    this.loadMetrics()
     this.refreshInterval = setInterval(() => {
       this.loadMetrics()
-      this.loadAlerts()
     }, 10000) // 每10秒刷新
   },
   beforeUnmount() {
@@ -229,25 +208,17 @@ export default {
   methods: {
     async loadMetrics() {
       try {
-        const res = await fetch('/api/dashboard/metrics')
+        const res = await fetch(`/api/dashboard/metrics?range=${this.timeRange}`)
         this.metrics = await res.json()
         this.renderCharts()
       } catch (error) {
         console.error('加载监控数据失败:', error)
       }
     },
-    async loadAlerts() {
-      try {
-        const res = await fetch('/api/alerts?limit=5')
-        const data = await res.json()
-        this.recentAlerts = data.alerts || []
-      } catch (error) {
-        console.error('加载告警数据失败:', error)
-      }
-    },
+
     async refreshMetrics() {
       this.loading = true
-      await Promise.all([this.loadMetrics(), this.loadAlerts()])
+      await Promise.all([this.loadMetrics()])
       this.loading = false
     },
     onTimeRangeChange() {
@@ -256,27 +227,43 @@ export default {
       this.refreshMetrics()
     },
     exportData() {
-      // 生成CSV格式数据
-      const csvData = this.generateCSV()
-      const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' })
-      const link = document.createElement('a')
-      const url = URL.createObjectURL(blob)
-      link.setAttribute('href', url)
-      link.setAttribute('download', `metrics_${new Date().toISOString().split('T')[0]}.csv`)
-      link.style.visibility = 'hidden'
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
+      try {
+        // 生成CSV格式数据
+        const csvData = this.generateCSV()
+        // 添加 BOM (\uFEFF) 以解决 Excel 打开 UTF-8 CSV 中文乱码问题
+        const blob = new Blob(['\uFEFF' + csvData], { type: 'text/csv;charset=utf-8;' })
+        const url = URL.createObjectURL(blob)
+        
+        const link = document.createElement('a')
+        link.href = url
+        // 使用简单文件名，避免特殊字符问题
+        link.download = `metrics_${new Date().getFullYear()}${String(new Date().getMonth()+1).padStart(2,'0')}${String(new Date().getDate()).padStart(2,'0')}.csv`
+        link.style.display = 'none'
+        document.body.appendChild(link)
+        
+        link.click()
+        
+        // 延迟清理，确保浏览器有足够时间处理下载
+        setTimeout(() => {
+          document.body.removeChild(link)
+          URL.revokeObjectURL(url)
+        }, 100)
+        
+        this.$message.success(this.$t('common.success'))
+      } catch (e) {
+        console.error('Export failed:', e)
+        this.$message.error(this.$t('common.error'))
+      }
     },
     generateCSV() {
-      const headers = '指标名称,数值,时间'
+      const headers = `${this.$t('monitoring.label')},${this.$t('monitoring.value')},${this.$t('monitoring.time')}`
       const rows = [
-        `总晋升数,${this.metrics.total_promotions || 0},${new Date().toISOString()}`,
-        `总拒绝数,${this.metrics.total_rejections || 0},${new Date().toISOString()}`,
-        `总遗忘数,${this.metrics.total_forgotten || 0},${new Date().toISOString()}`,
-        `当前队列,${this.metrics.current_queue_length || 0},${new Date().toISOString()}`,
-        `晋升成功率(%),${(this.metrics.promotion_success_rate || 0).toFixed(2)},${new Date().toISOString()}`,
-        `缓存命中率(%),${(this.metrics.cache_hit_rate || 0).toFixed(2)},${new Date().toISOString()}`
+        `${this.$t('monitoring.totalPromotions')},${this.metrics.total_promotions || 0},${new Date().toISOString()}`,
+        `${this.$t('monitoring.totalRejections')},${this.metrics.total_rejections || 0},${new Date().toISOString()}`,
+        `${this.$t('monitoring.totalForgotten')},${this.metrics.total_forgotten || 0},${new Date().toISOString()}`,
+        `${this.$t('monitoring.currentQueue')},${this.metrics.current_queue_length || 0},${new Date().toISOString()}`,
+        `${this.$t('monitoring.successRate')}(%),${(this.metrics.promotion_success_rate || 0).toFixed(2)},${new Date().toISOString()}`,
+        `${this.$t('monitoring.cacheHitRate')}(%),${(this.metrics.cache_hit_rate || 0).toFixed(2)},${new Date().toISOString()}`
       ]
       return [headers, ...rows].join('\n')
     },
@@ -315,6 +302,13 @@ export default {
       this.renderQueueChart()
       this.renderCategoryChart()
     },
+    formatChartLabel(timestamp) {
+      const date = new Date(timestamp)
+      if (['7d', '30d'].includes(this.timeRange)) {
+        return date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' })
+      }
+      return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+    },
     renderPromotionChart() {
       const ctx = this.$refs.promotionChart?.getContext('2d')
       if (!ctx) return
@@ -328,7 +322,7 @@ export default {
       this.charts.promotion = new Chart(ctx, {
         type: 'line',
         data: {
-          labels: trend.map(p => new Date(p.timestamp).toLocaleTimeString('zh-CN', {hour: '2-digit', minute: '2-digit'})),
+          labels: trend.map(p => this.formatChartLabel(p.timestamp)),
           datasets: [{
             label: this.$t('monitoring.promotionCount'),
             data: trend.map(p => p.value),
@@ -363,7 +357,7 @@ export default {
       this.charts.queue = new Chart(ctx, {
         type: 'line',
         data: {
-          labels: trend.map(p => new Date(p.timestamp).toLocaleTimeString('zh-CN', {hour: '2-digit', minute: '2-digit'})),
+          labels: trend.map(p => this.formatChartLabel(p.timestamp)),
           datasets: [{
             label: this.$t('monitoring.queueLen'),
             data: trend.map(p => p.value),
@@ -500,6 +494,23 @@ h1 {
   margin: 0 0 1rem 0;
   color: #374151;
   font-size: 1.125rem;
+}
+
+.chart-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.info-icon {
+  font-size: 16px;
+  color: var(--el-text-color-secondary);
+  cursor: help;
+  transition: color 0.3s;
+}
+
+.info-icon:hover {
+  color: var(--el-color-primary);
 }
 
 canvas {

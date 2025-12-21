@@ -18,6 +18,7 @@ const routes = [
             { path: 'memory', component: MemoryExplorer },
             { path: 'staging', component: StagingReview },
             { path: 'monitoring', component: MonitoringDashboard },
+            { path: 'alerts', component: () => import('./views/AlertCenter.vue'), meta: { title: 'Alert Center' } },
             { path: 'control', component: AdminControl },
             { path: 'users', component: Users },
             { path: 'status', component: Status },

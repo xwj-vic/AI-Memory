@@ -65,7 +65,7 @@
 - **可配置半衰期**：根据使用场景调整衰减速率
 - **自动清理**：删除低于阈值分数的低价值记忆
 
-### � 监控与仪表板(Monitoring & Dashboard)
+### 📡 监控与仪表板(Monitoring & Dashboard)
 
 实时可视化记忆系统的健康状况和性能指标：
 
@@ -78,7 +78,30 @@
 ![Staging 审核](image/Snipaste_2025-12-20_12-23-53.png)
 ![系统控制台](image/Snipaste_2025-12-20_12-24-00.png)
 
-### �🔧 生产级特性
+### 🚨 智能告警系统
+
+自动监控内存系统健康状态，及时发现潜在问题：
+
+- **动态规则配置**：通过Web UI实时调整告警阈值和冷却时间，无需重启
+- **多级別告警**：支持 ERROR/WARNING/INFO 三级告警
+- **内置规则**：
+  - 队列积压检测（Staging队列过长）
+  - 晋升成功率过低
+  - 缓存命中率异常
+  - 记忆衰减突增
+- **趋势图表**：24小时告警趋势可视化，ECharts优化显示
+- **统计持久化**：规则执行次数和通知成功率存储到数据库，服务重启后数据保留
+
+### 🌐 国际化支持
+
+全面的多语言支持：
+
+- **双语言界面**：支持中文和英文
+- **一键切换**：顶部导航栏快速切换语言
+- **完整翻译**：所有页面、按钮、提示信息均已翻译
+- **本地化存储**：语言偏好自动记忆
+
+### 🔧 生产级特性
 
 - **多存储协同**：Redis（快速） + MySQL（结构化） + Qdrant（语义化）
 - **完全可配置**：所有阈值和超时参数均可通过环境变量调整
@@ -126,6 +149,37 @@ go build -o ai-memory
 **默认管理员账号**：
 - 用户名：`admin`
 - 密码：`admin123`
+
+### 🐳 Docker 部署（推荐）
+
+使用 Docker Compose 一键部署：
+
+```bash
+# 克隆仓库
+git clone https://github.com/xwj-vic/AI-Memory.git
+cd AI-Memory
+
+# 配置 OpenAI API 密钥
+cp docker/.env.docker docker/.env
+# 编辑 docker/.env 填入 OPENAI_API_KEY
+
+# 启动所有服务
+cd docker && docker-compose up -d
+
+# 查看日志
+docker-compose logs -f app
+```
+
+这将启动：
+- **AI-Memory 应用** 端口 `8080`
+- **Redis** 短期记忆存储
+- **MySQL** 元数据和监控
+- **Qdrant** 向量搜索
+
+停止所有服务：
+```bash
+docker-compose down
+```
 
 ---
 
@@ -255,6 +309,8 @@ OPENAI_EMBEDDING_MODEL=text-embedding-ada-002
 - 🔍 按类型/用户搜索和筛选记忆
 - ✏️ 编辑或删除特定记忆
 - 👥 用户管理和会话追踪
+- 🚨 告警中心：配置告警规则，查看实时告警和趋势
+- 🌐 多语言支持：中英文自由切换
 
 ---
 

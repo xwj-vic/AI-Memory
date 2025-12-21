@@ -1,0 +1,157 @@
+version: '3.8'
+
+services:
+  # ========== 应用服务 ==========
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: ai-memory-app
+    ports:
+      - "8080:8080"
+    environment:
+      # ========== Redis ==========
+      REDIS_ADDR: redis:6379
+      REDIS_PASSWORD: ""
+      REDIS_DB: "0"
+      
+      # ========== MySQL ==========
+      DB_HOST: mysql:3306
+      DB_USER: root
+      DB_PASS: ${MYSQL_ROOT_PASSWORD:-ai_memory_secret}
+      DB_NAME: ai_memory
+      
+      # ========== Qdrant ==========
+      QDRANT_ADDR: qdrant:6334
+      QDRANT_COLLECTION: ${QDRANT_COLLECTION:-ai_memory}
+      VECTOR_STORE_PROVIDER: qdrant
+      
+      # ========== LLM 配置 ==========
+      LLM_PROVIDER: ${LLM_PROVIDER:-openai}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-ada-002}
+      JUDGE_MODEL: ${JUDGE_MODEL:-gpt-4o-mini}
+      EXTRACT_TAGS_MODEL: ${EXTRACT_TAGS_MODEL:-gpt-4o}
+      
+      # ========== STM 短期记忆配置 ==========
+      STM_EXPIRATION_DAYS: ${STM_EXPIRATION_DAYS:-7}
+      STM_WINDOW_SIZE: ${STM_WINDOW_SIZE:-100}
+      STM_MAX_RETENTION_DAYS: ${STM_MAX_RETENTION_DAYS:-7}
+      STM_BATCH_JUDGE_SIZE: ${STM_BATCH_JUDGE_SIZE:-10}
+      
+      # ========== Staging 暂存区配置 ==========
+      STAGING_MIN_OCCURRENCES: ${STAGING_MIN_OCCURRENCES:-2}
+      STAGING_MIN_WAIT_HOURS: ${STAGING_MIN_WAIT_HOURS:-48}
+      STAGING_VALUE_THRESHOLD: ${STAGING_VALUE_THRESHOLD:-0.6}
+      STAGING_CONFIDENCE_HIGH: ${STAGING_CONFIDENCE_HIGH:-0.8}
+      STAGING_CONFIDENCE_LOW: ${STAGING_CONFIDENCE_LOW:-0.5}
+      
+      # ========== LTM 长期记忆衰减配置 ==========
+      LTM_DECAY_HALF_LIFE_DAYS: ${LTM_DECAY_HALF_LIFE_DAYS:-90}
+      LTM_DECAY_MIN_SCORE: ${LTM_DECAY_MIN_SCORE:-0.3}
+      
+      # ========== 监控系统配置 ==========
+      METRICS_PERSIST_INTERVAL_MINUTES: ${METRICS_PERSIST_INTERVAL_MINUTES:-1}
+      METRICS_HISTORY_LOAD_HOURS: ${METRICS_HISTORY_LOAD_HOURS:-24}
+      METRICS_MEMORY_RETENTION_HOURS: ${METRICS_MEMORY_RETENTION_HOURS:-1}
+      METRICS_RETENTION_DAYS: ${METRICS_RETENTION_DAYS:-30}
+      
+      # ========== 告警引擎配置 ==========
+      ALERT_CHECK_INTERVAL_MINUTES: ${ALERT_CHECK_INTERVAL_MINUTES:-1}
+      ALERT_QUEUE_BACKLOG_THRESHOLD: ${ALERT_QUEUE_BACKLOG_THRESHOLD:-100}
+      ALERT_QUEUE_BACKLOG_COOLDOWN_MINUTES: ${ALERT_QUEUE_BACKLOG_COOLDOWN_MINUTES:-10}
+      ALERT_SUCCESS_RATE_THRESHOLD: ${ALERT_SUCCESS_RATE_THRESHOLD:-60}
+      ALERT_SUCCESS_RATE_COOLDOWN_MINUTES: ${ALERT_SUCCESS_RATE_COOLDOWN_MINUTES:-30}
+      ALERT_CACHE_HIT_RATE_THRESHOLD: ${ALERT_CACHE_HIT_RATE_THRESHOLD:-20}
+      ALERT_CACHE_HIT_RATE_COOLDOWN_MINUTES: ${ALERT_CACHE_HIT_RATE_COOLDOWN_MINUTES:-15}
+      ALERT_DECAY_SPIKE_THRESHOLD: ${ALERT_DECAY_SPIKE_THRESHOLD:-1000}
+      ALERT_DECAY_SPIKE_COOLDOWN_MINUTES: ${ALERT_DECAY_SPIKE_COOLDOWN_MINUTES:-60}
+      ALERT_HISTORY_MAX_SIZE: ${ALERT_HISTORY_MAX_SIZE:-100}
+      
+      # ========== 告警通知配置 ==========
+      ALERT_WEBHOOK_ENABLED: ${ALERT_WEBHOOK_ENABLED:-false}
+      ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
+      ALERT_WEBHOOK_TIMEOUT_SECONDS: ${ALERT_WEBHOOK_TIMEOUT_SECONDS:-5}
+      ALERT_EMAIL_ENABLED: ${ALERT_EMAIL_ENABLED:-false}
+      ALERT_EMAIL_SMTP_HOST: ${ALERT_EMAIL_SMTP_HOST:-smtp.example.com}
+      ALERT_EMAIL_SMTP_PORT: ${ALERT_EMAIL_SMTP_PORT:-587}
+      ALERT_EMAIL_USERNAME: ${ALERT_EMAIL_USERNAME:-}
+      ALERT_EMAIL_PASSWORD: ${ALERT_EMAIL_PASSWORD:-}
+      ALERT_EMAIL_FROM: ${ALERT_EMAIL_FROM:-AI-Memory Alert <alert@example.com>}
+      ALERT_EMAIL_TO: ${ALERT_EMAIL_TO:-}
+      ALERT_EMAIL_USE_TLS: ${ALERT_EMAIL_USE_TLS:-true}
+      ALERT_NOTIFY_LEVELS: ${ALERT_NOTIFY_LEVELS:-ERROR,WARNING}
+      
+      # ========== 日志 ==========
+      LOG_DIR: /app/log
+    volumes:
+      - ai-memory-logs:/app/log
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - ai-memory-network
+
+  # ========== Redis ==========
+  redis:
+    image: redis:7-alpine
+    container_name: ai-memory-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - ai-memory-network
+
+  # ========== MySQL ==========
+  mysql:
+    image: mysql:8.0
+    container_name: ai-memory-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-ai_memory_secret}
+      MYSQL_DATABASE: ai_memory
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ../schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks:
+      - ai-memory-network
+
+  # ========== Qdrant ==========
+  qdrant:
+    image: qdrant/qdrant:v1.13.0
+    container_name: ai-memory-qdrant
+    volumes:
+      - qdrant-data:/qdrant/storage
+    restart: unless-stopped
+    networks:
+      - ai-memory-network
+
+# ========== 数据卷 ==========
+volumes:
+  redis-data:
+  mysql-data:
+  qdrant-data:
+  ai-memory-logs:
+
+# ========== 网络 ==========
+networks:
+  ai-memory-network:
+    driver: bridge

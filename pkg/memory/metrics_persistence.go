@@ -15,6 +15,7 @@ type MetricsPersistence struct {
 	persistInterval   time.Duration
 	stopChan          chan struct{}
 	lastPersistedTime time.Time
+	lastQueueLength   float64 // 上次写入的队列长度（只在变化时写入）
 }
 
 // NewMetricsPersistence 创建持久化实例
@@ -23,6 +24,7 @@ func NewMetricsPersistence(db *sql.DB, persistIntervalMinutes int) *MetricsPersi
 		db:              db,
 		persistInterval: time.Duration(persistIntervalMinutes) * time.Minute,
 		stopChan:        make(chan struct{}),
+		lastQueueLength: -1, // 初始化为-1确保首次一定写入
 	}
 }
 
@@ -121,11 +123,15 @@ func (mp *MetricsPersistence) insertTimeSeriesData(ctx context.Context, collecto
 		}
 	}
 
-	// 插入队列长度历史
+	// 插入队列长度历史（只在值变化时写入，减少数据量）
 	for _, point := range collector.QueueLengthHistory {
 		if point.Timestamp.After(mp.lastPersistedTime) {
-			if _, err := stmt.ExecContext(ctx, "queue_length", point.Value, nil, point.Timestamp); err != nil {
-				logger.Error("Failed to insert queue_length metric", err)
+			// 只在队列长度变化时才写入数据库
+			if point.Value != mp.lastQueueLength {
+				if _, err := stmt.ExecContext(ctx, "queue_length", point.Value, nil, point.Timestamp); err != nil {
+					logger.Error("Failed to insert queue_length metric", err)
+				}
+				mp.lastQueueLength = point.Value
 			}
 			if point.Timestamp.After(maxTime) {
 				maxTime = point.Timestamp
@@ -269,4 +275,57 @@ func (mp *MetricsPersistence) LoadRecentTimeSeries(ctx context.Context, collecto
 	mp.lastPersistedTime = maxTime
 
 	return nil
+}
+
+// CleanupOldData 清理超过 retentionDays 天的历史数据
+func (mp *MetricsPersistence) CleanupOldData(ctx context.Context, retentionDays int) error {
+	mp.mu.Lock()
+	defer mp.mu.Unlock()
+
+	query := `DELETE FROM metrics_timeseries WHERE timestamp < DATE_SUB(NOW(), INTERVAL ? DAY)`
+	result, err := mp.db.ExecContext(ctx, query, retentionDays)
+	if err != nil {
+		return err
+	}
+
+	rowsDeleted, _ := result.RowsAffected()
+	if rowsDeleted > 0 {
+		logger.System("✅ 监控数据清理完成", "deleted_rows", rowsDeleted, "retention_days", retentionDays)
+	}
+
+	return nil
+}
+
+// StartWithCleanup 启动定时持久化和清理任务
+func (mp *MetricsPersistence) StartWithCleanup(collector *MetricsCollector, retentionDays int) {
+	// 启动原有的持久化定时器
+	persistTicker := time.NewTicker(mp.persistInterval)
+
+	// 启动每日清理定时器（每24小时执行一次）
+	cleanupTicker := time.NewTicker(24 * time.Hour)
+
+	go func() {
+		// 启动时立即执行一次清理
+		if err := mp.CleanupOldData(context.Background(), retentionDays); err != nil {
+			logger.Error("启动时清理历史数据失败", err)
+		}
+
+		for {
+			select {
+			case <-persistTicker.C:
+				mp.persistMetrics(collector)
+			case <-cleanupTicker.C:
+				if err := mp.CleanupOldData(context.Background(), retentionDays); err != nil {
+					logger.Error("定时清理历史数据失败", err)
+				}
+			case <-mp.stopChan:
+				persistTicker.Stop()
+				cleanupTicker.Stop()
+				logger.System("Metrics persistence stopped")
+				return
+			}
+		}
+	}()
+
+	logger.System("✅ Metrics persistence started (with cleanup)", "persist_interval", mp.persistInterval, "retention_days", retentionDays)
 }

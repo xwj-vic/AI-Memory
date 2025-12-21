@@ -47,19 +47,6 @@ func NewMySQLEndUserStore(db *sql.DB) *MySQLEndUserStore {
 	return &MySQLEndUserStore{db: db}
 }
 
-func (s *MySQLEndUserStore) Init() error {
-	query := `
-		CREATE TABLE IF NOT EXISTS end_users (
-			id INT AUTO_INCREMENT PRIMARY KEY,
-			user_identifier VARCHAR(255) NOT NULL UNIQUE,
-			last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-		);
-	`
-	_, err := s.db.Exec(query)
-	return err
-}
-
 func (s *MySQLEndUserStore) UpsertUser(ctx context.Context, identifier string) error {
 	query := `
 		INSERT INTO end_users (user_identifier, last_active) 

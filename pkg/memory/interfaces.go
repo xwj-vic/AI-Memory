@@ -77,9 +77,8 @@ type ListStore interface {
 	Expire(ctx context.Context, key string, expiration time.Duration) error
 }
 
-// EndUserStore manages end users in persistent storage (MySQL).
+// EndUserStore 持久化层接口（for end_users table）
 type EndUserStore interface {
-	Init() error
 	UpsertUser(ctx context.Context, identifier string) error
 	ListUsers(ctx context.Context) ([]types.EndUser, error)
 }
