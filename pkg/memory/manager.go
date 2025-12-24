@@ -205,6 +205,29 @@ func (m *Manager) Retrieve(ctx context.Context, userID string, sessionID string,
 	ltmRecords, err := m.vectorStore.Search(ctx, vector, remainingSlots, 0.7, filters)
 	if err == nil {
 		allRecords = append(allRecords, ltmRecords...)
+
+		// [Proactive Self-Healing] Async Repair
+		// If we found multiple results, check if they are near-identical
+		if len(ltmRecords) > 1 {
+			go func(recs []types.Record, uid string) {
+				// Wait a bit or use a fresh context to avoid canceling with the request
+				repairCtx := context.Background()
+				for i := 0; i < len(recs); i++ {
+					for j := i + 1; j < len(recs); j++ {
+						sim := cosineSimilarity(recs[i].Embedding, recs[j].Embedding)
+						if sim > 0.98 {
+							logger.System("🔍 [Self-Healing] Found duplicate in recall, triggering repair", "user", uid)
+							// Trigger a targeted dedup/merge
+							strategy, mergedContent, err := m.judge.DecideMergeStrategy(repairCtx, recs[i].Content, recs[j].Content)
+							if err == nil && strategy != "keep_both" {
+								m.executeMergeStrategy(repairCtx, recs[i], recs[j], strategy, mergedContent)
+							}
+							return // Only trigger once per recall
+						}
+					}
+				}
+			}(ltmRecords, userID)
+		}
 	}
 
 	// Enforce global MaxRecentMemories
