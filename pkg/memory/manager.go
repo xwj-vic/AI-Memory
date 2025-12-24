@@ -164,7 +164,29 @@ func (m *Manager) Retrieve(ctx context.Context, userID string, sessionID string,
 		}
 	}
 
-	// 2. Search LTM (User Context)
+	// 2. Fetch Staging (Mid-term Context)
+	// These are summarized facts that haven't reached LTM yet.
+	// REFINED: Now uses session-based isolation.
+	stagingEntries, err := m.stagingStore.GetBySession(ctx, userID, sessionID)
+	if err == nil {
+		for _, entry := range stagingEntries {
+			// Convert StagingEntry to Record for uniform output
+			allRecords = append(allRecords, types.Record{
+				ID:        entry.ID,
+				Content:   entry.Content,
+				Timestamp: entry.LastSeenAt,
+				Type:      types.Staging,
+				Metadata: map[string]interface{}{
+					"category":         string(entry.Category),
+					"confidence_score": entry.ConfidenceScore,
+					"occurrence_count": entry.OccurrenceCount,
+					"source":           "staging",
+				},
+			})
+		}
+	}
+
+	// 3. Search LTM (User Context)
 	remainingSlots := limit
 	if m.cfg.MaxRecentMemories > 0 && limit > m.cfg.MaxRecentMemories {
 		remainingSlots = m.cfg.MaxRecentMemories
@@ -237,7 +259,35 @@ func (m *Manager) List(ctx context.Context, filter Filter) ([]types.Record, erro
 		}
 	}
 
-	// 2. Fetch Long-Term Memory if requested
+	// 2. Fetch Staging Memory if requested
+	if filter.Type == "staging" || filter.Type == "all" || filter.Type == "" {
+		var stagingEntries []*types.StagingEntry
+		var err error
+		if filter.UserID != "" {
+			stagingEntries, err = m.stagingStore.GetAllByUser(ctx, filter.UserID)
+		} else {
+			stagingEntries, err = m.stagingStore.GetPendingEntries(ctx, 1, 0)
+		}
+
+		if err == nil {
+			for _, entry := range stagingEntries {
+				results = append(results, types.Record{
+					ID:        entry.ID,
+					Content:   entry.Content,
+					Timestamp: entry.LastSeenAt,
+					Type:      types.Staging,
+					Metadata: map[string]interface{}{
+						"category":         string(entry.Category),
+						"user_id":          entry.UserID,
+						"confidence_score": entry.ConfidenceScore,
+						"occurrence_count": entry.OccurrenceCount,
+					},
+				})
+			}
+		}
+	}
+
+	// 3. Fetch Long-Term Memory if requested
 	if filter.Type == "long_term" || filter.Type == "all" || filter.Type == "" {
 		// Call Vector Store List with filters
 		vFilters := make(map[string]interface{})

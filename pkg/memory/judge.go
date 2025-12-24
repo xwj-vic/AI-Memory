@@ -45,8 +45,16 @@ func (j *Judge) JudgeMemoryValue(ctx context.Context, content string) (*types.Ju
   "reason": "简短理由",
   "tags": ["标签1", "标签2"],
   "entities": {"实体类型": "实体值"},
-  "should_stage": true/false
-}`, content)
+  "should_stage": true/false,
+  "is_critical": true/false
+}
+
+判定指南：
+- is_critical: 仅当满足以下任一条件时设为 true：
+  1. 强烈意图/深度承诺（如“我决定要学习Golang”、“我准备搬家到上海”）
+  2. 核心事实变更（如“我入职了Google”、“我结婚了”）
+  3. 用户显式要求记住（如“记住，我的生日是10月1日”）
+- should_stage: 通用的有价值信息。`, content)
 
 	response, err := j.llm.GenerateText(ctx, prompt)
 	if err != nil {
@@ -98,9 +106,14 @@ func (j *Judge) JudgeBatch(ctx context.Context, contents []string) ([]*types.Jud
     "reason": "简短理由",
     "tags": ["标签1"],
     "entities": {"类型": "值"},
-    "should_stage": true/false
+    "should_stage": true/false,
+    "is_critical": true/false
   }
-]`, len(contents), contentList)
+]
+
+判定指南：
+- is_critical: 关键事实、强烈意图或用户明确要求记忆的内容（直接晋升）。
+- should_stage: 普通有价值信息（进入暂存观察）。`, len(contents), contentList)
 
 	response, err := j.llm.GenerateText(ctx, prompt)
 	if err != nil {

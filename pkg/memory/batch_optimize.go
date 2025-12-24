@@ -125,7 +125,7 @@ func (m *Manager) JudgeAndStageFromSTMCached(ctx context.Context, userID, sessio
 		// 添加到Staging
 		for i, result := range cachedResults {
 			if result.ShouldStage && result.ValueScore >= m.cfg.StagingValueThreshold {
-				if err := m.stagingStore.AddOrIncrement(ctx, userID, needsJudgment[i], result, m.embedder); err != nil {
+				if err := m.stagingStore.AddOrIncrement(ctx, userID, sessionID, needsJudgment[i], result, m.embedder); err != nil {
 					logger.Error("添加到暂存区失败", err)
 				}
 			}

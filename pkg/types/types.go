@@ -78,6 +78,7 @@ type StagingEntry struct {
 	ExtractedEntities map[string]string `json:"extracted_entities"`
 	Status            StagingStatus     `json:"status"`
 	ConfirmedBy       string            `json:"confirmed_by"` // auto/user
+	SessionIDs        []string          `json:"session_ids"`  // 记录所有触达过该事实的会话
 }
 
 // JudgeResult LLM判定模型的输出
@@ -89,6 +90,7 @@ type JudgeResult struct {
 	Tags            []string          `json:"tags"`         // 提取的标签
 	Entities        map[string]string `json:"entities"`     // 实体映射
 	ShouldStage     bool              `json:"should_stage"` // 是否应进入暂存区
+	IsCritical      bool              `json:"is_critical"`  // 是否属于关键事实/强烈意图（可直接晋升LTM）
 }
 
 // RecallOptions 增强的召回查询选项

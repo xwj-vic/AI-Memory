@@ -17,7 +17,6 @@ import (
 // 这个方法在Add()后可以调用，批量处理STM中的新记忆
 func (m *Manager) JudgeAndStageFromSTM(ctx context.Context, userID, sessionID string) error {
 	key := fmt.Sprintf("memory:stm:%s:%s", userID, sessionID)
-	judgedSetKey := fmt.Sprintf("memory:judged:%s:%s", userID, sessionID)
 
 	// 获取STM数据
 	stmData, err := m.stmStore.LRange(ctx, key, 0, -1)
@@ -36,12 +35,6 @@ func (m *Manager) JudgeAndStageFromSTM(ctx context.Context, userID, sessionID st
 		var rec types.Record
 		if err := json.Unmarshal([]byte(data), &rec); err != nil {
 			continue
-		}
-
-		// 检查是否已判定
-		isJudged, _ := m.stmStore.SIsMember(ctx, judgedSetKey, rec.ID)
-		if isJudged {
-			continue // 跳过已判定记录
 		}
 
 		toJudge = append(toJudge, rec)
@@ -125,7 +118,11 @@ func (m *Manager) JudgeAndStageFromSTM(ctx context.Context, userID, sessionID st
 				continue
 			}
 			content := batch[j].Content
-			if result.ShouldStage && result.ValueScore >= m.cfg.StagingValueThreshold {
+
+			// 日志：打印判定结果，方便排查
+			logger.System("STM判定结果", "index", j, "score", result.ValueScore, "stage", result.ShouldStage, "critical", result.IsCritical, "cat", result.Category)
+
+			if result.IsCritical || (result.ShouldStage && result.ValueScore >= m.cfg.StagingValueThreshold) {
 				// 【优化】先总结重构，存储精炼后的内容到Staging
 				summary, err := m.judge.SummarizeAndRestructure(ctx, content, result.Category)
 				if err != nil {
@@ -134,28 +131,31 @@ func (m *Manager) JudgeAndStageFromSTM(ctx context.Context, userID, sessionID st
 				}
 
 				// 存储总结后的内容（原始内容已在STM中，无需重复存储）
-				if err := m.stagingStore.AddOrIncrement(ctx, userID, summary, result, m.embedder); err != nil {
-					logger.Error("添加到暂存区失败", err)
+				if result.IsCritical {
+					// 【绿色通道】跳过暂存区，直接尝试晋升 LTM
+					logger.System("🚀 [Fast-Track] 发现关键事实/强烈意图，直连 LTM", "user", userID, "category", result.Category)
+					if err := m.promoteToLTMCorrelator(ctx, userID, summary, result.Category, result.ConfidenceScore, result.Tags, result.Entities, "fast-track"); err != nil {
+						logger.Error("绿色通道晋升失败", err)
+						// 降级：如果直连失败，依然存入 Staging 兜底
+						if err := m.stagingStore.AddOrIncrement(ctx, userID, sessionID, summary, result, m.embedder); err != nil {
+							logger.Error("降级存入暂存区失败", err)
+						}
+					}
+				} else {
+					// 正常流程：进入暂存区
+					if err := m.stagingStore.AddOrIncrement(ctx, userID, sessionID, summary, result, m.embedder); err != nil {
+						logger.Error("添加到暂存区失败", err)
+					}
 				}
 			}
 
-			// 标记为已判定（兜底）
-			m.stmStore.SAdd(ctx, judgedSetKey, batch[j].ID)
-
 			// 【自动删除】不管是否满足价值阈值，判定过的记录都从STM物理删除，
 			// 因为有价值的已经去 Staging 了，无价值的也不需要留在 STM 占用上下文。
-			// 如果希望保留上下文，这里逻辑需要调整。
 			recordData, _ := json.Marshal(batch[j])
 			if err := m.stmStore.LRem(ctx, key, 0, string(recordData)); err != nil {
 				logger.Error("从STM删除记录失败", err)
 			}
 		}
-	}
-
-	// 设置judged Set的过期时间（与STM Key一致）
-	if m.cfg.STMExpirationDays > 0 {
-		expiration := time.Duration(m.cfg.STMExpirationDays) * 24 * time.Hour
-		m.stmStore.Expire(ctx, judgedSetKey, expiration)
 	}
 
 	return nil
@@ -178,8 +178,11 @@ func (m *Manager) PromoteStagingToLTM(ctx context.Context) error {
 		// 判断信心水平
 		if entry.ConfidenceScore >= m.cfg.StagingConfidenceHigh {
 			// 高信心：自动晋升
-			if err := m.promoteSingleEntry(ctx, entry, "auto"); err != nil {
+			if err := m.promoteToLTMCorrelator(ctx, entry.UserID, entry.Content, entry.Category, entry.ConfidenceScore, entry.ExtractedTags, entry.ExtractedEntities, "auto"); err != nil {
 				logger.Error("自动晋升失败", err)
+			} else {
+				// 晋升成功后删除 Staging 条目
+				m.stagingStore.Delete(ctx, entry.ID)
 			}
 		} else if entry.ConfidenceScore >= m.cfg.StagingConfidenceLow {
 			// 中等信心：需要用户确认（暂时跳过，等待Admin界面确认）
@@ -195,32 +198,28 @@ func (m *Manager) PromoteStagingToLTM(ctx context.Context) error {
 	return nil
 }
 
-// promoteSingleEntry 晋升单条记忆到LTM
+// promoteSingleEntry 保持 API 兼容性（可选）
 func (m *Manager) promoteSingleEntry(ctx context.Context, entry *types.StagingEntry, confirmedBy string) error {
-	// 1. Staging中已经存储了总结后的内容，直接使用
-	summary := entry.Content
+	if err := m.promoteToLTMCorrelator(ctx, entry.UserID, entry.Content, entry.Category, entry.ConfidenceScore, entry.ExtractedTags, entry.ExtractedEntities, confirmedBy); err != nil {
+		return err
+	}
+	return m.stagingStore.Delete(ctx, entry.ID)
+}
 
-	// 2. 生成Embedding（如果Staging中没有embedding，则重新生成）
-	var vector []float32
-	var err error
-
-	if len(entry.Embedding) > 0 {
-		// 复用Staging中的embedding
-		vector = entry.Embedding
-	} else {
-		// 重新生成embedding
-		vector, err = m.embedder.EmbedQuery(ctx, summary)
-		if err != nil {
-			return fmt.Errorf("生成embedding失败: %w", err)
-		}
+// promoteToLTMCorrelator 核心晋升关联器：处理 LTM 写入前的去重、合并与结构化提取
+func (m *Manager) promoteToLTMCorrelator(ctx context.Context, userID, summary string, category types.MemoryCategory, confidence float64, fallbackTags []string, fallbackEntities map[string]string, confirmedBy string) error {
+	// 1. 生成 Embedding
+	vector, err := m.embedder.EmbedQuery(ctx, summary)
+	if err != nil {
+		return fmt.Errorf("生成embedding失败: %w", err)
 	}
 
-	// 3. 【需求5-方案1】在LTM中搜索相似记忆
-	filters := map[string]interface{}{"user_id": entry.UserID}
+	// 2. 在 LTM 中搜索相似记忆进行去重/合并
+	filters := map[string]interface{}{"user_id": userID}
 	similarRecords, _ := m.vectorStore.Search(ctx, vector, 1, 0.95, filters)
 
 	if len(similarRecords) > 0 {
-		// 4a. 找到相似记忆，调用智能合并策略
+		// 找到相似记忆，调用智能合并策略
 		existing := similarRecords[0]
 		strategy, mergedContent, err := m.judge.DecideMergeStrategy(ctx, existing.Content, summary)
 		if err != nil {
@@ -230,7 +229,6 @@ func (m *Manager) promoteSingleEntry(ctx context.Context, entry *types.StagingEn
 
 		switch strategy {
 		case "update_existing":
-			// 只更新访问计数和衰减分数
 			if count, ok := existing.Metadata["access_count"].(int); ok {
 				existing.Metadata["access_count"] = count + 1
 			} else {
@@ -242,7 +240,6 @@ func (m *Manager) promoteSingleEntry(ctx context.Context, entry *types.StagingEn
 			logger.System("LTM去重：更新计数", "strategy", strategy, "existing_id", existing.ID)
 
 		case "merge":
-			// 合并内容并更新
 			existing.Content = mergedContent
 			newVector, _ := m.embedder.EmbedQuery(ctx, mergedContent)
 			if newVector != nil {
@@ -256,80 +253,54 @@ func (m *Manager) promoteSingleEntry(ctx context.Context, entry *types.StagingEn
 			logger.System("LTM去重：合并内容", "strategy", strategy, "existing_id", existing.ID)
 
 		case "keep_newer":
-			// 删除旧记录，创建新记录
 			m.vectorStore.Delete(ctx, []string{existing.ID})
 			goto createNew
 
 		case "keep_both":
-			// 都保留，正常创建新记录
 			goto createNew
 		}
 
-		// 删除Staging条目
-		m.stagingStore.Delete(ctx, entry.ID)
-		GetGlobalMetrics().RecordPromotion(string(entry.Category), true)
+		GetGlobalMetrics().RecordPromotion(string(category), true)
 		return nil
 	}
 
 createNew:
-	// 4b. 无相似记忆，正常创建
-	// 提取结构化标签（使用更强大的模型）
-	tags, entities, err := m.judge.ExtractStructuredTags(ctx, summary, entry.Category)
+	// 正常创建或 keep_both/keep_newer 后的创建
+	tags, entities, err := m.judge.ExtractStructuredTags(ctx, summary, category)
 	if err != nil {
-		// 降级使用预提取的标签
-		tags = entry.ExtractedTags
-		entities = entry.ExtractedEntities
+		tags = fallbackTags
+		entities = fallbackEntities
 	}
 
-	// 构建LTM记录
 	now := time.Now()
-	metadata := types.LTMMetadata{
-		UserID:           entry.UserID,
-		CreatedAt:        now,
-		Tags:             tags,
-		Entities:         entities,
-		Category:         entry.Category,
-		LastAccessAt:     now,
-		AccessCount:      0,
-		DecayScore:       1.0,
-		SourceType:       "staging",
-		ConfidenceOrigin: entry.ConfidenceScore,
-	}
-
 	metadataMap := map[string]interface{}{
-		"user_id":           metadata.UserID,
-		"created_at":        metadata.CreatedAt,
-		"tags":              metadata.Tags,
-		"entities":          metadata.Entities,
-		"category":          string(metadata.Category),
-		"last_access_at":    metadata.LastAccessAt,
-		"access_count":      metadata.AccessCount,
-		"decay_score":       metadata.DecayScore,
-		"source_type":       metadata.SourceType,
-		"confidence_origin": metadata.ConfidenceOrigin,
+		"user_id":           userID,
+		"created_at":        now,
+		"tags":              tags,
+		"entities":          entities,
+		"category":          string(category),
+		"last_access_at":    now,
+		"access_count":      0,
+		"decay_score":       1.0,
+		"source_type":       confirmedBy,
+		"confidence_origin": confidence,
 	}
 
 	ltmRecord := types.Record{
 		ID:        uuid.New().String(),
-		Content:   summary, // 使用总结后的内容
+		Content:   summary,
 		Embedding: vector,
-		Timestamp: entry.LastSeenAt,
+		Timestamp: now,
 		Metadata:  metadataMap,
 		Type:      types.LongTerm,
 	}
 
-	// 写入LTM
 	if err := m.vectorStore.Add(ctx, []types.Record{ltmRecord}); err != nil {
 		return fmt.Errorf("写入LTM失败: %w", err)
 	}
 
-	// 删除Staging条目
-	if err := m.stagingStore.Delete(ctx, entry.ID); err != nil {
-		logger.Error("删除暂存区条目失败", err)
-	}
-	GetGlobalMetrics().RecordPromotion(string(entry.Category), true)
-
-	logger.MemoryPromotion(string(entry.Category), confirmedBy, entry.ConfidenceScore, summary)
+	GetGlobalMetrics().RecordPromotion(string(category), true)
+	logger.MemoryPromotion(string(category), confirmedBy, confidence, summary)
 	return nil
 }
 
