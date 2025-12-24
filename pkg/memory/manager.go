@@ -4,7 +4,6 @@ import (
 	"ai-memory/pkg/config"
 	"ai-memory/pkg/llm"
 	"ai-memory/pkg/logger"
-	"ai-memory/pkg/prompts"
 	"ai-memory/pkg/store"
 	"ai-memory/pkg/types"
 	"context"
@@ -21,7 +20,6 @@ import (
 // Manager implements the Memory interface.
 type Manager struct {
 	cfg          *config.Config
-	prompts      *prompts.Registry
 	vectorStore  VectorStore
 	stmStore     ListStore
 	endUserStore EndUserStore
@@ -54,7 +52,6 @@ func NewManager(cfg *config.Config, vStore VectorStore, lStore ListStore, uStore
 
 	m := &Manager{
 		cfg:             cfg,
-		prompts:         prompts.NewRegistry(cfg.SummarizePrompt, cfg.ExtractProfilePrompt),
 		vectorStore:     vStore,
 		stmStore:        lStore,
 		endUserStore:    uStore,

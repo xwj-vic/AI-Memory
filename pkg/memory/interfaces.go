@@ -14,9 +14,6 @@ type Memory interface {
 	// Retrieve finds relevant memories based on a query.
 	Retrieve(ctx context.Context, userID string, sessionID string, query string, limit int) ([]types.Record, error)
 
-	// Summarize triggers a consolidation of short-term memories into long-term storage.
-	Summarize(ctx context.Context, userID string, sessionID string) error
-
 	// List retrieves all long-term memories (for admin).
 	List(ctx context.Context, filter map[string]interface{}, limit int, offset int) ([]types.Record, error)
 
@@ -61,6 +58,7 @@ type ListStore interface {
 	RPush(ctx context.Context, key string, values ...interface{}) error
 	RPushWithExpire(ctx context.Context, key string, expirationDays int, values ...interface{}) error
 	LRange(ctx context.Context, key string, start, stop int) ([]string, error)
+	LRem(ctx context.Context, key string, count int64, value interface{}) error
 	Del(ctx context.Context, keys ...string) error
 	// ScanKeys returns keys matching a pattern (e.g. for finding user sessions).
 	ScanKeys(ctx context.Context, pattern string) ([]string, error)

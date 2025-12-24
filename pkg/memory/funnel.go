@@ -52,6 +52,21 @@ func (m *Manager) JudgeAndStageFromSTM(ctx context.Context, userID, sessionID st
 		return nil // 所有记录都已判定
 	}
 
+	// 【触发检查】
+	shouldStart := false
+	if len(toJudge) >= m.cfg.STMJudgeMinMessages {
+		shouldStart = true
+	} else if len(toJudge) > 0 {
+		// 检查第一条未判定记录的等待时间
+		if time.Since(toJudge[0].Timestamp).Minutes() >= float64(m.cfg.STMJudgeMaxWaitMinutes) {
+			shouldStart = true
+		}
+	}
+
+	if !shouldStart {
+		return nil // 未达到触发阈值
+	}
+
 	logger.System("STM判定开始", "total", len(stmData), "new", len(toJudge), "user", userID, "session", sessionID)
 
 	// 批量判定（每批最多10条）
@@ -124,8 +139,16 @@ func (m *Manager) JudgeAndStageFromSTM(ctx context.Context, userID, sessionID st
 				}
 			}
 
-			// 标记为已判定
+			// 标记为已判定（兜底）
 			m.stmStore.SAdd(ctx, judgedSetKey, batch[j].ID)
+
+			// 【自动删除】不管是否满足价值阈值，判定过的记录都从STM物理删除，
+			// 因为有价值的已经去 Staging 了，无价值的也不需要留在 STM 占用上下文。
+			// 如果希望保留上下文，这里逻辑需要调整。
+			recordData, _ := json.Marshal(batch[j])
+			if err := m.stmStore.LRem(ctx, key, 0, string(recordData)); err != nil {
+				logger.Error("从STM删除记录失败", err)
+			}
 		}
 	}
 
