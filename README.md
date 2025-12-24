@@ -159,9 +159,9 @@ One-command deployment with Docker Compose:
 git clone https://github.com/xwj-vic/AI-Memory.git
 cd AI-Memory
 
-# Configure your OpenAI API key
-cp docker/.env.docker docker/.env
-# Edit docker/.env and set OPENAI_API_KEY
+# Configure your environment (API keys, etc.)
+cp .env.example .env
+# Edit .env and set OPENAI_API_KEY
 
 # Start all services
 cd docker && docker-compose up -d
@@ -273,6 +273,8 @@ Key environment variables in `.env`:
 STM_EXPIRATION_DAYS=7              # Auto-expire after N days
 STM_WINDOW_SIZE=100               # Max recent messages
 STM_BATCH_JUDGE_SIZE=10           # Batch processing size
+STM_JUDGE_MIN_MESSAGES=5          # Trigger judge if msg count >= N
+STM_JUDGE_MAX_WAIT_MINUTES=60     # Trigger judge if oldest msg wait >= N mins
 
 # Staging Area
 STAGING_MIN_OCCURRENCES=2         # Requires repetition
@@ -330,7 +332,6 @@ ai-memory/
 │   │   ├── funnel.go      # Funnel system logic
 │   │   ├── ltm_dedup.go   # LTM deduplication
 │   │   └── interfaces.go  # Abstractions
-│   ├── prompts/           # LLM prompt templates
 │   ├── store/             # Storage implementations
 │   │   ├── redis.go       # STM store
 │   │   ├── qdrant.go      # Vector store

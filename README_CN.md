@@ -159,9 +159,9 @@ go build -o ai-memory
 git clone https://github.com/xwj-vic/AI-Memory.git
 cd AI-Memory
 
-# 配置 OpenAI API 密钥
-cp docker/.env.docker docker/.env
-# 编辑 docker/.env 填入 OPENAI_API_KEY
+# 配置你的环境变量（API Key 等）
+cp .env.example .env
+# 编辑 .env 填入 OPENAI_API_KEY
 
 # 启动所有服务
 cd docker && docker-compose up -d
@@ -273,6 +273,8 @@ curl -X GET "http://localhost:8080/api/memory/retrieve?user_id=user123&query=户
 STM_EXPIRATION_DAYS=7              # N天后自动过期
 STM_WINDOW_SIZE=100                # 最大保留消息数
 STM_BATCH_JUDGE_SIZE=10            # 批量处理大小
+STM_JUDGE_MIN_MESSAGES=5           # 未判定消息达 N 条时触发
+STM_JUDGE_MAX_WAIT_MINUTES=60      # 第一条消息等待超过 N 分钟时触发
 
 # Staging 暂存区配置
 STAGING_MIN_OCCURRENCES=2          # 需要重复出现次数
@@ -330,7 +332,6 @@ ai-memory/
 │   │   ├── funnel.go      # 漏斗系统逻辑
 │   │   ├── ltm_dedup.go   # LTM 去重
 │   │   └── interfaces.go  # 接口抽象
-│   ├── prompts/           # LLM 提示词模板
 │   ├── store/             # 存储实现
 │   │   ├── redis.go       # STM 存储
 │   │   ├── qdrant.go      # 向量存储

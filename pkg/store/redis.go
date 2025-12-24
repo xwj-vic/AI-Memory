@@ -57,6 +57,11 @@ func (r *RedisStore) LRange(ctx context.Context, key string, start, stop int) ([
 	return r.client.LRange(ctx, key, int64(start), int64(stop)).Result()
 }
 
+// LRem removes elements from a list.
+func (r *RedisStore) LRem(ctx context.Context, key string, count int64, value interface{}) error {
+	return r.client.LRem(ctx, key, count, value).Err()
+}
+
 // Del removes keys.
 func (r *RedisStore) Del(ctx context.Context, keys ...string) error {
 	return r.client.Del(ctx, keys...).Err()

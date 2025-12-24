@@ -32,17 +32,16 @@ type Config struct {
 	DBName string
 
 	// Legacy STM settings (仍在Retrieve中使用)
-	ContextWindow        int    // STM召回窗口大小
-	MinSummaryItems      int    // 触发Summary的最小条目数
-	MaxRecentMemories    int    // 召回记忆数量限制
-	SummarizePrompt      string // Summarize prompt模板
-	ExtractProfilePrompt string // 实体提取prompt模板
+	ContextWindow     int // STM召回窗口大小
+	MaxRecentMemories int // 召回记忆数量限制
 
 	// STM配置
-	STMWindowSize       int // STM滑动窗口大小
-	STMMaxRetentionDays int // STM最大保留天数
-	STMExpirationDays   int // STM过期天数（0表示不过期）
-	STMBatchJudgeSize   int // 批量判定大小
+	STMWindowSize          int // STM滑动窗口大小
+	STMMaxRetentionDays    int // STM最大保留天数
+	STMExpirationDays      int // STM过期天数（0表示不过期）
+	STMBatchJudgeSize      int // 批量判定大小
+	STMJudgeMinMessages    int // 触发判定的最小消息数
+	STMJudgeMaxWaitMinutes int // 触发判定的最大等待分钟数
 
 	// Staging配置
 	StagingMinOccurrences int     // Staging最小出现次数
@@ -102,7 +101,6 @@ func Load() (*Config, error) {
 
 	db, _ := strconv.Atoi(getEnv("REDIS_DB", "0"))
 	ctxWindow, _ := strconv.Atoi(getEnv("STM_CONTEXT_WINDOW", "10"))
-	minSummary, _ := strconv.Atoi(getEnv("MIN_SUMMARY_ITEMS", "5"))
 	maxRecent, _ := strconv.Atoi(getEnv("MAX_RECENT_MEMORIES", "100"))
 
 	// 漏斗型配置
@@ -110,6 +108,8 @@ func Load() (*Config, error) {
 	stmMaxRetentionDays, _ := strconv.Atoi(getEnv("STM_MAX_RETENTION_DAYS", "7"))
 	stmExpirationDays, _ := strconv.Atoi(getEnv("STM_EXPIRATION_DAYS", "7"))
 	stmBatchJudgeSize, _ := strconv.Atoi(getEnv("STM_BATCH_JUDGE_SIZE", "10"))
+	stmJudgeMinMessages, _ := strconv.Atoi(getEnv("STM_JUDGE_MIN_MESSAGES", "5"))
+	stmJudgeMaxWaitMinutes, _ := strconv.Atoi(getEnv("STM_JUDGE_MAX_WAIT_MINUTES", "60"))
 
 	stagingMinOccurrences, _ := strconv.Atoi(getEnv("STAGING_MIN_OCCURRENCES", "2"))
 	stagingMinWaitHours, _ := strconv.Atoi(getEnv("STAGING_MIN_WAIT_HOURS", "48"))
@@ -151,11 +151,7 @@ func Load() (*Config, error) {
 		OpenAIBaseURL:        getEnv("OPENAI_BASE_URL", "https://api.openai.com/v1"),
 		OpenAIModel:          getEnv("OPENAI_MODEL", "gpt-4o-mini"),
 		OpenAIEmbeddingModel: getEnv("OPENAI_EMBEDDING_MODEL", "text-embedding-ada-002"),
-		LLMProvider:          getEnv("LLM_PROVIDER", "openai"),
-		SummarizePrompt:      getEnv("SUMMARIZE_PROMPT", "Summarize the following conversation completely regarding key facts and user preferences. Ignore casual chitchat.\n\n%s"),
-		ExtractProfilePrompt: getEnv("EXTRACT_PROFILE_PROMPT", "Analyze the following interaction. Identify any persistent user preferences, traits, or facts that should be remembered for future personalization. Return ONLY these facts as a bulleted list. If none, return 'None'.\n\n%s"),
 		ContextWindow:        ctxWindow,
-		MinSummaryItems:      minSummary,
 		MaxRecentMemories:    maxRecent,
 		QdrantAddr:           getEnv("QDRANT_ADDR", "localhost"), // Client usually adds port, but let's verify usage
 		QdrantCollection:     getEnv("QDRANT_COLLECTION", "ai_memory"),
@@ -166,19 +162,21 @@ func Load() (*Config, error) {
 		DBName:               getEnv("DB_NAME", "ai_memory"),
 
 		// 漏斗型配置
-		STMWindowSize:         stmWindowSize,
-		STMMaxRetentionDays:   stmMaxRetentionDays,
-		STMExpirationDays:     stmExpirationDays,
-		STMBatchJudgeSize:     stmBatchJudgeSize,
-		StagingMinOccurrences: stagingMinOccurrences,
-		StagingMinWaitHours:   stagingMinWaitHours,
-		StagingValueThreshold: stagingValueThreshold,
-		StagingConfidenceHigh: stagingConfidenceHigh,
-		StagingConfidenceLow:  stagingConfidenceLow,
-		LTMDecayHalfLifeDays:  ltmDecayHalfLifeDays,
-		LTMDecayMinScore:      ltmDecayMinScore,
-		JudgeModel:            getEnv("JUDGE_MODEL", "gpt-4o-mini"),
-		ExtractTagsModel:      getEnv("EXTRACT_TAGS_MODEL", "gpt-4o"),
+		STMWindowSize:          stmWindowSize,
+		STMMaxRetentionDays:    stmMaxRetentionDays,
+		STMExpirationDays:      stmExpirationDays,
+		STMBatchJudgeSize:      stmBatchJudgeSize,
+		STMJudgeMinMessages:    stmJudgeMinMessages,
+		STMJudgeMaxWaitMinutes: stmJudgeMaxWaitMinutes,
+		StagingMinOccurrences:  stagingMinOccurrences,
+		StagingMinWaitHours:    stagingMinWaitHours,
+		StagingValueThreshold:  stagingValueThreshold,
+		StagingConfidenceHigh:  stagingConfidenceHigh,
+		StagingConfidenceLow:   stagingConfidenceLow,
+		LTMDecayHalfLifeDays:   ltmDecayHalfLifeDays,
+		LTMDecayMinScore:       ltmDecayMinScore,
+		JudgeModel:             getEnv("JUDGE_MODEL", "gpt-4o-mini"),
+		ExtractTagsModel:       getEnv("EXTRACT_TAGS_MODEL", "gpt-4o"),
 
 		// 监控系统配置
 		MetricsPersistIntervalMinutes: metricsPersistInterval,

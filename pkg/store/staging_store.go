@@ -28,7 +28,7 @@ func NewStagingStore(client *redis.Client, ttlDays int) *StagingStore {
 
 // AddOrIncrement 添加或更新暂存区条目（频次+1）
 // 【需求3.1】集成语义去重：使用向量相似度检测
-func (s *StagingStore) AddOrIncrement(ctx context.Context, userID, content string, judgeResult *types.JudgeResult, embedder Embedder) error {
+func (s *StagingStore) AddOrIncrement(ctx context.Context, userID, sessionID, content string, judgeResult *types.JudgeResult, embedder Embedder) error {
 	// 1. 生成embedding（用于语义去重）
 	var embedding []float32
 	var err error
@@ -52,6 +52,18 @@ func (s *StagingStore) AddOrIncrement(ctx context.Context, userID, content strin
 			similarEntry.Category = judgeResult.Category
 			similarEntry.ExtractedTags = judgeResult.Tags
 			similarEntry.ExtractedEntities = judgeResult.Entities
+
+			// 记录 SessionID (去重)
+			foundSession := false
+			for _, sid := range similarEntry.SessionIDs {
+				if sid == sessionID {
+					foundSession = true
+					break
+				}
+			}
+			if !foundSession && sessionID != "" {
+				similarEntry.SessionIDs = append(similarEntry.SessionIDs, sessionID)
+			}
 
 			// 更新
 			data, _ := json.Marshal(similarEntry)
@@ -93,6 +105,18 @@ func (s *StagingStore) AddOrIncrement(ctx context.Context, userID, content strin
 		entry.Category = judgeResult.Category
 		entry.ExtractedTags = judgeResult.Tags
 		entry.ExtractedEntities = judgeResult.Entities
+
+		// 记录 SessionID (去重)
+		foundSession := false
+		for _, sid := range entry.SessionIDs {
+			if sid == sessionID {
+				foundSession = true
+				break
+			}
+		}
+		if !foundSession && sessionID != "" {
+			entry.SessionIDs = append(entry.SessionIDs, sessionID)
+		}
 	} else {
 		// 创建新条目
 		entry = types.StagingEntry{
@@ -100,6 +124,7 @@ func (s *StagingStore) AddOrIncrement(ctx context.Context, userID, content strin
 			Content:           content,
 			Embedding:         embedding, // 存储embedding
 			UserID:            userID,
+			SessionIDs:        []string{sessionID},
 			FirstSeenAt:       now,
 			LastSeenAt:        now,
 			OccurrenceCount:   1,
@@ -260,6 +285,26 @@ func (s *StagingStore) GetAllByUser(ctx context.Context, userID string) ([]*type
 	}
 
 	return entries, nil
+}
+
+// GetBySession 获取该会话触达过的暂存区条目 (Session 隔离)
+func (s *StagingStore) GetBySession(ctx context.Context, userID, sessionID string) ([]*types.StagingEntry, error) {
+	allEntries, err := s.GetAllByUser(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	var sessionEntries []*types.StagingEntry
+	for _, entry := range allEntries {
+		for _, sid := range entry.SessionIDs {
+			if sid == sessionID {
+				sessionEntries = append(sessionEntries, entry)
+				break
+			}
+		}
+	}
+
+	return sessionEntries, nil
 }
 
 // Update 更新暂存区条目状态

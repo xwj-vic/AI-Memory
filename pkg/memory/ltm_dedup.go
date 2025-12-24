@@ -7,58 +7,83 @@ import (
 	"math"
 )
 
-// DeduplicateLTM 定期扫描并去重LTM中的相似记忆
+// DeduplicateLTM 扫描并去重LTM中的相似记忆
 func (m *Manager) DeduplicateLTM(ctx context.Context) error {
-	batchSize := 1000
+	batchSize := 100
 	offset := 0
 	processed := 0
 	merged := 0
+	processedIDs := make(map[string]bool)
 
 	for {
-		// 1. 分批获取LTM记录
+		// 1. 分批获取LTM记录作为种子
 		records, err := m.vectorStore.List(ctx, map[string]interface{}{}, batchSize, offset)
 		if err != nil || len(records) == 0 {
 			break
 		}
 
-		// 2. 对当前批次构建相似度矩阵
-		for i := 0; i < len(records); i++ {
-			for j := i + 1; j < len(records); j++ {
-				rec1, rec2 := records[i], records[j]
+		for _, seed := range records {
+			if processedIDs[seed.ID] {
+				continue
+			}
 
-				// 只处理同一用户的记录
-				user1, ok1 := rec1.Metadata["user_id"].(string)
-				user2, ok2 := rec2.Metadata["user_id"].(string)
-				if !ok1 || !ok2 || user1 != user2 {
+			// 2. 利用向量搜索查找全局范围内的相似记录
+			// 相似度阈值设为 0.95
+			similar, err := m.vectorStore.Search(ctx, seed.Embedding, 10, 0.90, map[string]interface{}{
+				"user_id": seed.Metadata["user_id"],
+			})
+			if err != nil {
+				continue
+			}
+
+			for _, match := range similar {
+				if match.ID == seed.ID || processedIDs[match.ID] {
 					continue
 				}
 
-				// 计算余弦相似度
-				similarity := cosineSimilarity(rec1.Embedding, rec2.Embedding)
-
-				if similarity > 0.95 {
+				// 计算精确余弦相似度（Search 可能返回近似结果）
+				sim := cosineSimilarity(seed.Embedding, match.Embedding)
+				if sim > 0.95 {
 					// 3. 调用智能合并策略
-					strategy, mergedContent, err := m.judge.DecideMergeStrategy(ctx, rec1.Content, rec2.Content)
+					strategy, mergedContent, err := m.judge.DecideMergeStrategy(ctx, seed.Content, match.Content)
 					if err != nil {
 						logger.Error("合并策略判定失败", err)
 						continue
 					}
 
-					if err := m.executeMergeStrategy(ctx, rec1, rec2, strategy, mergedContent); err != nil {
+					if strategy == "keep_both" {
+						continue
+					}
+
+					if err := m.executeMergeStrategy(ctx, seed, match, strategy, mergedContent); err != nil {
 						logger.Error("执行合并策略失败", err)
 					} else {
 						merged++
+						processedIDs[match.ID] = true
+						// 如果 seed 被删除了，需要跳出 inner loop
+						if strategy == "keep_newer" && match.Timestamp.After(seed.Timestamp) {
+							processedIDs[seed.ID] = true
+							break
+						}
+						if (strategy == "keep_higher_access" || strategy == "update_existing" || strategy == "merge") &&
+							(match.Metadata["access_count"].(int) > seed.Metadata["access_count"].(int)) {
+							processedIDs[seed.ID] = true
+							break
+						}
 					}
-
-					processed++
 				}
 			}
+			processedIDs[seed.ID] = true
+			processed++
 		}
 
 		offset += batchSize
+		if len(records) < batchSize {
+			break
+		}
 	}
 
-	logger.System("LTM去重完成", "scanned", offset, "processed", processed, "merged", merged)
+	logger.System("LTM全局去重完成", "scanned", processed, "merged", merged)
 	return nil
 }
 
